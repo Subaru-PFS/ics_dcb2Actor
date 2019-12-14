@@ -10,7 +10,7 @@ from enuActor.utils.fsmThread import FSMThread
 
 class sources(pdu.pdu):
     warmingTime = dict(hgar=15, neon=15, krypton=15, halogen=60)
-    names = ['hgar', 'neon', 'halogen']
+    names = ['hgar', 'neon', 'krypton', 'halogen']
 
     def __init__(self, actor, name, loglevel=logging.DEBUG):
         """This sets up the connections to/from the hub, the logger, and the twisted reactor.
