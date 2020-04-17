@@ -1,4 +1,5 @@
 __author__ = 'alefur'
+
 import logging
 import time
 
@@ -29,6 +30,7 @@ class sources(pdu.pdu):
 
         self.addStateCB('WARMING', self.warming)
         self.sim = PduSim()
+        self.startWarmup = dict()
         self.abortWarmup = False
 
         self.logger = logging.getLogger(self.name)
@@ -57,7 +59,7 @@ class sources(pdu.pdu):
         """
         for source in sources.names:
             state = self.getState(source, cmd=cmd)
-            cmd.inform(f'{source}={state}')
+            cmd.inform(f'{source}={state},{self.elapsed(source)}')
 
     def getState(self, source, cmd):
         """Get current light source state.
@@ -72,6 +74,20 @@ class sources(pdu.pdu):
 
         return state
 
+    def switching(self, cmd, sourcesOff):
+        """Switch on/off sources dictionary.
+
+        :param cmd: current command.
+        :param powerPorts: list(hgar,neon).
+        :type powerPorts: list.
+        :raise: Exception with warning message.
+        """
+        for source in sourcesOff:
+            self.startWarmup.pop(source, None)
+
+        powerOff = dict([(self.powerPorts[name], 'off') for name in sourcesOff])
+        return pdu.pdu.switching(self, cmd, powerOff)
+
     def warming(self, cmd, sourcesOn, warmingTime, ti=0.01):
         """Switch on source lamp and wait for iis.warmingTime.
 
@@ -80,13 +96,17 @@ class sources(pdu.pdu):
         :type sourcesOn: list
         :raise: Exception with warning message.
         """
-        for outlet in sourcesOn:
-            self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
-            self.portStatus(cmd, outlet=outlet)
+        start = time.time()
+        self.abortWarmup = False
+
+        for source in sourcesOn:
+            if self.isOff(source):
+                outlet = self.powerPorts[source]
+                self.startWarmup[source] = time.time()
+                self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
+                self.portStatus(cmd, outlet=outlet)
 
         if sourcesOn:
-            start = time.time()
-            self.abortWarmup = False
             while time.time() < start + warmingTime:
                 time.sleep(ti)
                 self.handleTimeout()
@@ -101,8 +121,21 @@ class sources(pdu.pdu):
         :return: state
         :rtype: bool
         """
-        state = self.actor.models[self.actor.name].keyVarDict[source].getValue()
+        state, __ = self.actor.models[self.actor.name].keyVarDict[source].getValue()
         return not bool(state)
+
+    def elapsed(self, source):
+        """Check for how much time source has been powered on.
+
+        :param source: source name.
+        :type source: str
+        :return: elapsed time
+        :rtype: float
+        """
+        try:
+            return int(round(time.time() - self.startWarmup[source]))
+        except KeyError:
+            return 0
 
     def doAbort(self):
         """Abort warmup.
