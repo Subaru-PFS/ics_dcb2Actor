@@ -66,7 +66,7 @@ class SourcesCmd(object):
         remainingTimes = [warmingTime - self.controller.elapsed(source) for source in sourcesOn]
         warmingTime = max(remainingTimes) if remainingTimes else 0
 
-        self.controller.switching(cmd, sourcesOff=sourcesOff)
+        self.controller.switchOff(cmd, sourcesOff)
         self.controller.substates.warming(cmd, sourcesOn=sourcesOn, warmingTime=warmingTime)
 
         self.controller.generate(cmd)

@@ -74,7 +74,7 @@ class sources(pdu.pdu):
 
         return state
 
-    def switching(self, cmd, sourcesOff):
+    def switchOff(self, cmd, sources):
         """Switch on/off sources dictionary.
 
         :param cmd: current command.
@@ -82,10 +82,10 @@ class sources(pdu.pdu):
         :type powerPorts: list.
         :raise: Exception with warning message.
         """
-        for source in sourcesOff:
+        for source in sources:
             self.startWarmup.pop(source, None)
 
-        powerOff = dict([(self.powerPorts[name], 'off') for name in sourcesOff])
+        powerOff = dict([(self.powerPorts[name], 'off') for name in sources])
         return pdu.pdu.switching(self, cmd, powerOff)
 
     def warming(self, cmd, sourcesOn, warmingTime, ti=0.01):
@@ -153,10 +153,8 @@ class sources(pdu.pdu):
         self.monitor = 0
         self.doAbort()
 
-        powerOff = dict([(self.powerPorts[name], 'off') for name in self.names])
-
         try:
-            self.switching(cmd, powerPorts=powerOff)
+            self.switchOff(cmd, self.names)
             self.getStatus(cmd)
         except Exception as e:
             cmd.warn('text=%s' % self.actor.strTraceback(e))
