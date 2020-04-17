@@ -5,7 +5,7 @@ import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 from enuActor.utils import waitForTcpServer
 from enuActor.utils.wrap import threaded, blocking, singleShot
-
+import time
 
 class SourcesCmd(object):
     def __init__(self, actor):
@@ -19,8 +19,8 @@ class SourcesCmd(object):
         #
         self.vocab = [
             ('sources', 'status', self.status),
-            ('sources', '[<on>] [<off>] [<attenuator>] [force]', self.switch),
-            ('arc', '[<on>] [<off>] [<attenuator>] [force]', self.switch),
+            ('sources', '[<on>] [<off>] [<attenuator>] [<warmingTime>] [force]', self.switch),
+            ('arc', '[<on>] [<off>] [<attenuator>] [<warmingTime>] [force]', self.switch),
             ('sources', 'abort', self.abort),
             ('sources', 'stop', self.stop),
             ('sources', 'start [@(operation|simulation)]', self.start),
@@ -33,6 +33,7 @@ class SourcesCmd(object):
                                         keys.Key("off", types.String() * (1, None),
                                                  help='which outlet to switch off.'),
                                         keys.Key("attenuator", types.Int(), help="attenuator value"),
+                                        keys.Key("warmingTime", types.Float(), help="customizable warming time"),
                                         )
 
     @property
@@ -58,13 +59,15 @@ class SourcesCmd(object):
             if name not in self.controller.names:
                 raise ValueError(f'{name} : unknown source')
 
-        powerOff = dict([(self.controller.powerPorts[name], 'off') for name in sourcesOff])
-        powerOn = [self.controller.powerPorts[name] for name in sourcesOn if self.controller.isOff(name)]
-
         warmingTime = max([self.controller.warmingTime[source] for source in sourcesOn]) if sourcesOn else 0
+        warmingTime = cmdKeys['warmingTime'].values[0] if 'warmingTime' in cmdKeys else warmingTime
+        warmingTime = 0 if 'force' in cmdKeys else warmingTime
 
-        self.controller.switching(cmd, powerPorts=powerOff)
-        self.controller.substates.warming(cmd, sourcesOn=powerOn, warmingTime=warmingTime)
+        remainingTimes = [warmingTime - self.controller.elapsed(source) for source in sourcesOn]
+        warmingTime = max(remainingTimes) if remainingTimes else 0
+
+        self.controller.switching(cmd, sourcesOff=sourcesOff)
+        self.controller.substates.warming(cmd, sourcesOn=sourcesOn, warmingTime=warmingTime)
 
         self.controller.generate(cmd)
 
