@@ -106,12 +106,11 @@ class sources(pdu.pdu):
                 self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
                 self.portStatus(cmd, outlet=outlet)
 
-        if sourcesOn:
-            while time.time() < start + warmingTime:
-                time.sleep(ti)
-                self.handleTimeout()
-                if self.abortWarmup:
-                    raise RuntimeError('sources warmup aborted')
+        while time.time() < start + warmingTime:
+            time.sleep(ti)
+            self.handleTimeout()
+            if self.abortWarmup:
+                raise RuntimeError('sources warmup aborted')
 
     def isOff(self, source):
         """Check if light source is currently off.
