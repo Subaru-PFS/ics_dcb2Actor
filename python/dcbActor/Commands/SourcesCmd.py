@@ -5,7 +5,7 @@ import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 from enuActor.utils import waitForTcpServer
 from enuActor.utils.wrap import threaded, blocking, singleShot
-import time
+
 
 class SourcesCmd(object):
     def __init__(self, actor):
@@ -19,8 +19,10 @@ class SourcesCmd(object):
         #
         self.vocab = [
             ('sources', 'status', self.status),
-            ('sources', '[<on>] [<off>] [<attenuator>] [<warmingTime>] [force]', self.switch),
-            ('arc', '[<on>] [<off>] [<attenuator>] [<warmingTime>] [force]', self.switch),
+            ('sources', '[<on>] [<attenuator>] [<warmingTime>] [force]', self.switchOn),
+            ('arc', '[<on>] [<attenuator>] [<warmingTime>] [force]', self.switchOn),
+            ('sources', '<off>', self.switchOff),
+            ('arc', '<off>', self.switchOff),
             ('sources', 'abort', self.abort),
             ('sources', 'stop', self.stop),
             ('sources', 'start [@(operation|simulation)]', self.start),
@@ -49,13 +51,12 @@ class SourcesCmd(object):
         self.controller.generate(cmd)
 
     @blocking
-    def switch(self, cmd):
-        """Switch on/off light sources."""
+    def switchOn(self, cmd):
+        """Switch on light sources."""
         cmdKeys = cmd.cmd.keywords
         sourcesOn = cmdKeys['on'].values if 'on' in cmdKeys else []
-        sourcesOff = cmdKeys['off'].values if 'off' in cmdKeys else []
 
-        for name in sourcesOn + sourcesOff:
+        for name in sourcesOn:
             if name not in self.controller.names:
                 raise ValueError(f'{name} : unknown source')
 
@@ -63,12 +64,25 @@ class SourcesCmd(object):
         warmingTime = cmdKeys['warmingTime'].values[0] if 'warmingTime' in cmdKeys else warmingTime
         warmingTime = 0 if 'force' in cmdKeys else warmingTime
 
-        remainingTimes = [warmingTime - self.controller.elapsed(source) for source in sourcesOn]
+        toBeWarmed = sourcesOn if sourcesOn else self.controller.sourcesOn
+        remainingTimes = [warmingTime - self.controller.elapsed(source) for source in toBeWarmed]
         warmingTime = max(remainingTimes) if remainingTimes else 0
 
-        self.controller.switchOff(cmd, sourcesOff)
         self.controller.substates.warming(cmd, sourcesOn=sourcesOn, warmingTime=warmingTime)
+        self.controller.generate(cmd)
 
+    @blocking
+    def switchOff(self, cmd):
+        """Switch off light sources."""
+        cmdKeys = cmd.cmd.keywords
+
+        sourcesOff = cmdKeys['off'].values if 'off' in cmdKeys else []
+
+        for name in sourcesOff:
+            if name not in self.controller.names:
+                raise ValueError(f'{name} : unknown source')
+
+        self.controller.switchOff(cmd, sourcesOff)
         self.controller.generate(cmd)
 
     def abort(self, cmd):

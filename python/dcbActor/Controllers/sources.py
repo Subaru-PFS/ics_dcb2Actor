@@ -11,7 +11,7 @@ from enuActor.utils.fsmThread import FSMThread
 
 class sources(pdu.pdu):
     warmingTime = dict(hgar=15, neon=15, krypton=15, halogen=60)
-    names = ['hgar', 'neon', 'krypton', 'halogen']
+    names = warmingTime.keys()
 
     def __init__(self, actor, name, loglevel=logging.DEBUG):
         """This sets up the connections to/from the hub, the logger, and the twisted reactor.
@@ -30,11 +30,15 @@ class sources(pdu.pdu):
 
         self.addStateCB('WARMING', self.warming)
         self.sim = PduSim()
-        self.startWarmup = dict()
+        self.warmupTime = dict()
         self.abortWarmup = False
 
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(loglevel)
+
+    @property
+    def sourcesOn(self):
+        return [source for source in self.names if not self.isOff(source)]
 
     def _loadCfg(self, cmd, mode=None):
         """Load iis configuration.
@@ -83,7 +87,7 @@ class sources(pdu.pdu):
         :raise: Exception with warning message.
         """
         for source in sources:
-            self.startWarmup.pop(source, None)
+            self.warmupTime.pop(source, None)
 
         powerOff = dict([(self.powerPorts[name], 'off') for name in sources])
         return pdu.pdu.switching(self, cmd, powerOff)
@@ -102,7 +106,7 @@ class sources(pdu.pdu):
         for source in sourcesOn:
             if self.isOff(source):
                 outlet = self.powerPorts[source]
-                self.startWarmup[source] = time.time()
+                self.warmupTime[source] = time.time()
                 self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
                 self.portStatus(cmd, outlet=outlet)
 
@@ -132,7 +136,7 @@ class sources(pdu.pdu):
         :rtype: float
         """
         try:
-            return int(round(time.time() - self.startWarmup[source]))
+            return int(round(time.time() - self.warmupTime[source]))
         except KeyError:
             return 0
 
