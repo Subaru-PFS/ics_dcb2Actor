@@ -20,13 +20,13 @@ class SourcesCmd(object):
         self.vocab = [
             ('sources', 'status', self.status),
             ('sources', '[<on>] [<attenuator>] [<warmingTime>] [force]', self.switchOn),
-            ('arc', '[<on>] [<attenuator>] [<warmingTime>] [force]', self.switchOn),
             ('sources', '<off>', self.switchOff),
-            ('arc', '<off>', self.switchOff),
             ('sources', 'abort', self.abort),
             ('sources', 'stop', self.stop),
             ('sources', 'start [@(operation|simulation)]', self.start),
         ]
+
+        self.vocab += [('arc', cmdStr, func) for __, cmdStr, func in self.vocab]
 
         # Define typed command arguments for the above commands.
         self.keys = keys.KeysDictionary("dcb__sources", (1, 1),
