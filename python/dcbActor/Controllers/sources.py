@@ -10,7 +10,7 @@ from enuActor.utils.fsmThread import FSMThread
 
 
 class sources(pdu.pdu):
-    warmingTime = dict(hgar=15, neon=15, krypton=15, halogen=60)
+    warmingTime = dict(hgar=15, neon=15, krypton=15, argon=15, halogen=60)
     names = warmingTime.keys()
 
     def __init__(self, actor, name, loglevel=logging.DEBUG):
