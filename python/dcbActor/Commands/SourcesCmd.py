@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import time
+
+from twisted.internet import reactor
 
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
@@ -24,6 +27,8 @@ class SourcesCmd(object):
             ('sources', 'abort', self.abort),
             ('sources', 'stop', self.stop),
             ('sources', 'start [@(operation|simulation)]', self.start),
+            ('sources', 'prepare [<halogen>] [<argon>] [<hgar>] [<neon>] [<krypton>]', self.prepare),
+            ('sources', 'go [<delay>]', self.go),
         ]
 
         self.vocab += [('arc', cmdStr, func) for __, cmdStr, func in self.vocab]
@@ -36,7 +41,15 @@ class SourcesCmd(object):
                                                  help='which outlet to switch off.'),
                                         keys.Key("attenuator", types.Int(), help="attenuator value"),
                                         keys.Key("warmingTime", types.Float(), help="customizable warming time"),
+                                        keys.Key("halogen", types.Float(), help="requested quartz halogen lamp time" ),
+                                        keys.Key("argon", types.Float(), help="requested Ar lamp time" ),
+                                        keys.Key("hgar", types.Float(), help="requested HgAr lamp time" ),
+                                        keys.Key("neon", types.Float(), help="requested Ne lamp time" ),
+                                        keys.Key("krypton", types.Float(), help="requested Kr lamp time" ),
+                                        keys.Key("delay", types.Float(), help="delay before turning lamps on" ),
                                         )
+        self.lampNames = ('halogen', 'argon', 'hgar', 'neon', 'krypton')
+        self.config = None
 
     @property
     def controller(self):
@@ -49,6 +62,95 @@ class SourcesCmd(object):
     def status(self, cmd):
         """Report state, mode, status."""
         self.controller.generate(cmd)
+
+    @property
+    def lampString(self):
+        """Describe the lamps configured by the .prepare() command."""
+        if self.config is None:
+            ll = []
+        ll = ["%s=%0.1f" % (ln, lv) for ln, lv in self.config.items()]
+        return ','.join(ll)
+
+    @blocking
+    def prepare(self, cmd):
+        """Configure a future illumination sequence."""
+
+        cmdKeys = cmd.cmd.keywords
+
+        if self.config is not None:
+            cmd.warn('text="active lamp configuration being overwritten (%s)"' % self.lampString)
+        self.config = dict()
+        for l in self.lampNames:
+            if l in cmdKeys:
+                lampTime = cmdKeys[l].values[0]
+                if lampTime > 60:
+                    self.config = None
+                    cmd.fail('text="currently limiting lamp times to 60s, sorry."')
+                    return
+                self.config[l] = lampTime
+
+        # Temporary restriction. We need to be careful about various overheads.
+        if len(self.config) != 1:
+            self.config = None
+            cmd.fail('text="currently only support driving a single lamp, sorry."')
+            return
+
+        # OK, this is _really_ skeevy. But we need header cards, to be grabbed at
+        #   the start of integration.
+        for lamp in self.lampNames:
+            state = 'on' if self.config.get(lamp, 0) > 0 else 'off'
+            cmd.inform(f'{lamp}={state},-1')
+
+        cmd.finish('text="will turn on: %s"' % (self.lampString))
+
+    def go(self, cmd):
+        """Run the preconfigured illumination sequence.
+
+        Notes
+        -----
+        Only supports one lamp for now.
+        """
+
+        cmdKeys = cmd.cmd.keywords
+
+        if self.config is None:
+            cmd.finish('text="no lamps are configured to turn on now"')
+            return
+
+        delay = cmdKeys['delay'].values[0] if 'delay' in cmdKeys else 0.0
+        sources = tuple(self.config.keys())
+
+        t0 = time.time()
+        if delay > 0:
+            cmd.debug(f'text="will turn on {sources} in {delay}s seconds"')
+            time.sleep(delay)
+
+        t1 = time.time()
+        try:
+            self.controller.switchOn(cmd, sources)
+        except Exception as e:
+            cmd.warn(f'text="lamp switch might not have been turned on ({e} .... trying to clean up"')
+            self.controller.switchOff(cmd, sources)
+            self.config = None
+            self.controller.generate(cmd)
+            return
+        t2 = time.time()
+
+        # TODO: loop over ontimes and turn lamps off
+        firstOnTime = min(self.config.values())
+        cmd.inform('text="turned on: %s"' % (self.lampString))
+
+        def turnLampOff(_self, cmd, sourceName, t0=t0, t1=t1, t2=t2):
+            self = _self
+            t3 = time.time()
+            cmd.debug(f'text="turning lamps {sources} off..."')
+            self.controller.switchOff(cmd, sources)
+            t4 = time.time()
+            cmd.debug(f'text="turned lamps off. delay={t1-t0:0.2f} switchOn={t2-t1:0.2f} on={t3-t2:0.2f} switchOff={t4-t3:0.2f}"')
+            self.config = None
+            self.controller.generate(cmd)
+
+        reactor.callLater(firstOnTime, turnLampOff, self, cmd, sources[0])
 
     @blocking
     def switchOn(self, cmd):
