@@ -68,6 +68,18 @@ class sources(pdu.pdu):
             state = self.getState(source, cmd=cmd)
             cmd.inform(f'{source}={state},{self.elapsed(source)}')
 
+    def spinUntil(self, cmd, sourceName, desiredState, timeout=2):
+        t0 = time.time()
+        t1 = t0
+        while t1-t0 < timeout:
+            state = self.sendOneCommand('read status o%s simple' % self.powerPorts[sourceName], cmd=cmd)
+            cmd.debug(f'text="{sourceName}={state}"')
+            if state == desiredState:
+                return True
+            time.sleep(0.05)
+            t1 = time.time()
+        return False
+
     def getState(self, source, cmd):
         """Get current light source state.
 
@@ -94,6 +106,34 @@ class sources(pdu.pdu):
 
         powerOff = dict([(self.powerPorts[name], 'off') for name in sources])
         return pdu.pdu.switching(self, cmd, powerOff)
+
+    def switchOn(self, cmd, sourcesOn):
+        """Switch on source lamps
+
+        :param cmd: current command.
+        :param sourcesOn: light source lamp to switch on.
+        :type sourcesOn: list
+        :raise: Exception with warning message.
+        """
+
+        switched = []
+        for source in sourcesOn:
+            cmd.debug(f'text="actually switching on outlet for {source}"')
+            outlet = self.powerPorts[source]
+            self.warmupTime[source] = time.time()
+            self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
+            ok = self.spinUntil(cmd, source, 'on', timeout=2)
+            switched.append(source)
+            if not ok:
+                try:
+                    self.switchOff(cmd, switched)
+                    switchedOff = True
+                except:
+                    switchedOff = False
+                raise RuntimeError(f"switch port {outlet} for lamp {source} did not turn on! all ports switched back off: {switchedOff}")
+
+            # self.portStatus(cmd, outlet=outlet)
+        return True
 
     def warming(self, cmd, sourcesOn, warmingTime, ti=0.01):
         """Switch on source lamp and wait for iis.warmingTime.
