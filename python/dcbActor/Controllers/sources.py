@@ -55,13 +55,16 @@ class sources(pdu.pdu):
             if source not in self.powerPorts.keys():
                 raise ValueError(f'{source} : unknown source')
 
-    def getStatus(self, cmd):
+    def getStatus(self, cmd, names=None):
         """Get and generate iis keywords.
 
         :param cmd: current command.
         :raise: Exception with warning message.
         """
-        for source in sources.names:
+
+        if names is None:
+            names = sources.names
+        for source in names:
             state = self.getState(source, cmd=cmd)
             cmd.inform(f'{source}={state},{self.elapsed(source)}')
 
