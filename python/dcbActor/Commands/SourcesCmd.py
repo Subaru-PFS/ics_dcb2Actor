@@ -102,8 +102,8 @@ class SourcesCmd(object):
 
         Note
         ----
-        Does *NOT* clear the predefined sequence. So that may be run again.
-         """
+        Always clears the predefined sequence.
+        """
 
         cmdKeys = cmd.cmd.keywords
 
