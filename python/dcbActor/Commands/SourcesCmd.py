@@ -89,12 +89,6 @@ class SourcesCmd(object):
                     return
                 self.config[l] = lampTime
 
-        # Temporary restriction. We need to be careful about various overheads.
-        if len(self.config) != 1:
-            self.config = None
-            cmd.fail('text="currently only support driving a single lamp, sorry."')
-            return
-
         # OK, this is _really_ skeevy. But we need header cards, to be grabbed at
         #   the start of integration.
         for lamp in self.lampNames:
@@ -106,19 +100,31 @@ class SourcesCmd(object):
     def go(self, cmd):
         """Run the preconfigured illumination sequence.
 
-        Notes
-        -----
-        Only supports one lamp for now.
-        """
+        Note
+        ----
+        Does *NOT* clear the predefined sequence. So that may be run again.
+         """
 
         cmdKeys = cmd.cmd.keywords
 
-        if self.config is None:
+        if self.config is None or len(self.config) == 0:
             cmd.finish('text="no lamps are configured to turn on now"')
+            self.config = None
             return
 
         delay = cmdKeys['delay'].values[0] if 'delay' in cmdKeys else 0.0
         sources = tuple(self.config.keys())
+
+        # Build a list of (secondsToLeaveOn, sourceSet) pairs
+        timeToSource = dict()
+        for k, v in self.config.items(): 
+            timeToSource.setdefault(v, set()).add(k)
+        lastT = 0.0
+        timeSequence = []
+        for t in sorted(timeToSource.keys()):
+            timeSequence.append([t-lastT, timeToSource[t]])
+            lastT = t
+        cmd.debug(f'text="lamp sequence is {timeSequence}"')
 
         t0 = time.time()
         if delay > 0:
@@ -135,22 +141,40 @@ class SourcesCmd(object):
             self.controller.generate(cmd)
             return
         t2 = time.time()
-
-        # TODO: loop over ontimes and turn lamps off
-        firstOnTime = min(self.config.values())
         cmd.inform('text="turned on: %s"' % (self.lampString))
 
-        def turnLampOff(_self, cmd, sourceName, t0=t0, t1=t1, t2=t2):
-            self = _self
+        def turnLampsOff(self, cmd, timeSequence, t0=t0, t1=t1, t2=t2):
+            """Turn off lamps, in order of ontime
+
+            Parameters
+            ----------
+            cmd : Command
+                Command to report back to.
+            timeSequence : [[dOntime, {sources}]]
+                array of incremental times and sets of sources. 
+
+            Steps through the timeSequenceArray, turning off all the sources in the first item,
+            then deferring until the start of second via a recursive call.
+            """
+
             t3 = time.time()
-            cmd.debug(f'text="turning lamps {sources} off..."')
+            thisChunk, *timeSequence = timeSequence
+            _, sources = thisChunk
+            cmd.debug(f'text="turning lamp {sources} off..."')
             self.controller.switchOff(cmd, sources)
             t4 = time.time()
-            cmd.debug(f'text="turned lamps off. delay={t1-t0:0.2f} switchOn={t2-t1:0.2f} on={t3-t2:0.2f} switchOff={t4-t3:0.2f}"')
-            self.config = None
-            self.controller.generate(cmd)
+            cmd.debug(f'text="turned {sources} off. delay={t1-t0:0.2f} switchOn={t2-t1:0.2f} on={t3-t2:0.2f} switchOff={t4-t3:0.2f}"')
 
-        reactor.callLater(firstOnTime, turnLampOff, self, cmd, sources[0])
+            if timeSequence:
+                trimBy = t4-t3
+                timeSequence = [[t-trimBy, sources] for t, sources in timeSequence]
+                reactor.callLater(timeSequence[0][0], turnLampsOff, self, cmd, timeSequence)
+            else:
+                self.config = None
+                self.controller.generate(cmd)
+
+        firstOnTime = timeSequence[0][0]
+        reactor.callLater(firstOnTime, turnLampsOff, self, cmd, timeSequence)
 
     @blocking
     def switchOn(self, cmd):
