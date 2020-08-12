@@ -68,7 +68,7 @@ class sources(pdu.pdu):
             state = self.getState(source, cmd=cmd)
             cmd.inform(f'{source}={state},{self.elapsed(source)}')
 
-    def spinUntil(self, cmd, sourceName, desiredState, timeout=2):
+    def spinUntil(self, cmd, sourceName, desiredState, timeout=5):
         t0 = time.time()
         t1 = t0
         while t1-t0 < timeout:
