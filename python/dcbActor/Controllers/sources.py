@@ -108,6 +108,30 @@ class sources(pdu.pdu):
         powerOff = dict([(self.powerPorts[name], 'off') for name in sources])
         return pdu.pdu.switching(self, cmd, powerOff)
 
+    def directSwitchOff(self, cmd, sources):
+        """Switch off source lamps
+
+        :param cmd: current command.
+        :param sourcesOn: light source lamp to switch on.
+        :type sourcesOn: list
+        :raise: Exception with warning message.
+        """
+
+        for source in sources:
+            cmd.debug(f'text="actually switching off outlet for {source}"')
+            outlet = self.powerPorts[source]
+            self.sendOneCommand('sw o%s off imme' % outlet, cmd=cmd)
+
+        for source in sources:
+            cmd.debug(f'text="checking outlet for {source}"')
+            ok = self.spinUntil(cmd, source, 'off', timeout=5)
+            if not ok:
+                raise RuntimeError(f"switch port {outlet} for lamp {source} did not turn off!")
+
+        cmd.debug(f'text="actually switched off outlets for {sources}"')
+        # self.portStatus(cmd)
+        return True
+
     def switchOn(self, cmd, sourcesOn):
         """Switch on source lamps
 

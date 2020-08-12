@@ -161,7 +161,7 @@ class SourcesCmd(object):
             thisChunk, *timeSequence = timeSequence
             _, sources = thisChunk
             cmd.debug(f'text="turning lamp {sources} off..."')
-            self.controller.switchOff(cmd, sources)
+            self.controller.directSwitchOff(cmd, sources)
             t4 = time.time()
             cmd.debug(f'text="turned {sources} off. delay={t1-t0:0.2f} switchOn={t2-t1:0.2f} on={t3-t2:0.2f} switchOff={t4-t3:0.2f}"')
 
