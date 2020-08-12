@@ -168,7 +168,11 @@ class SourcesCmd(object):
             if timeSequence:
                 trimBy = t4-t3
                 timeSequence = [[t-trimBy, sources] for t, sources in timeSequence]
-                reactor.callLater(timeSequence[0][0], turnLampsOff, self, cmd, timeSequence)
+                nextPause = timeSequence[0][0]
+                if nextPause < 0:
+                    cmd.warn(f'text="falling behind by {nextPause} on turning lamps off. Remaining changes: {timeSequence}"')
+                    nextPause = 0.0001
+                reactor.callLater(nextPause, turnLampsOff, self, cmd, timeSequence)
             else:
                 self.config = None
                 self.controller.generate(cmd)

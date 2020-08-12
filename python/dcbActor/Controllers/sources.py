@@ -78,6 +78,7 @@ class sources(pdu.pdu):
                 return True
             time.sleep(0.05)
             t1 = time.time()
+        cmd.warn(f'text="FAILED to switch {sourceName} to {desiredState} within {t1-t0} seconds"')
         return False
 
     def getState(self, source, cmd):
