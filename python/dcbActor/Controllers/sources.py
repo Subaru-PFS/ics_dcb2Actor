@@ -141,23 +141,26 @@ class sources(pdu.pdu):
         :raise: Exception with warning message.
         """
 
-        switched = []
         for source in sourcesOn:
             cmd.debug(f'text="actually switching on outlet for {source}"')
             outlet = self.powerPorts[source]
             self.warmupTime[source] = time.time()
             self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
-            ok = self.spinUntil(cmd, source, 'on', timeout=2)
+
+        switched = []
+        for source in sourcesOn:
+            cmd.debug(f'text="checking on outlet for {source}"')
+            ok = self.spinUntil(cmd, source, 'on', timeout=5)
             switched.append(source)
             if not ok:
                 try:
-                    self.switchOff(cmd, switched)
+                    self.directSwitchOff(cmd, switched)
                     switchedOff = True
                 except:
                     switchedOff = False
                 raise RuntimeError(f"switch port {outlet} for lamp {source} did not turn on! all ports switched back off: {switchedOff}")
 
-            # self.portStatus(cmd, outlet=outlet)
+        #self.portStatus(cmd, outlet=outlet)
         return True
 
     def warming(self, cmd, sourcesOn, warmingTime, ti=0.01):
