@@ -161,14 +161,18 @@ class SourcesCmd(object):
             thisChunk, *timeSequence = timeSequence
             _, sources = thisChunk
             cmd.debug(f'text="turning lamp {sources} off..."')
-            self.controller.switchOff(cmd, sources)
+            self.controller.directSwitchOff(cmd, sources)
             t4 = time.time()
             cmd.debug(f'text="turned {sources} off. delay={t1-t0:0.2f} switchOn={t2-t1:0.2f} on={t3-t2:0.2f} switchOff={t4-t3:0.2f}"')
 
             if timeSequence:
                 trimBy = t4-t3
                 timeSequence = [[t-trimBy, sources] for t, sources in timeSequence]
-                reactor.callLater(timeSequence[0][0], turnLampsOff, self, cmd, timeSequence)
+                nextPause = timeSequence[0][0]
+                if nextPause < 0:
+                    cmd.warn(f'text="falling behind by {nextPause} on turning lamps off. Remaining changes: {timeSequence}"')
+                    nextPause = 0.0001
+                reactor.callLater(nextPause, turnLampsOff, self, cmd, timeSequence)
             else:
                 self.config = None
                 self.controller.generate(cmd)

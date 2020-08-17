@@ -68,7 +68,7 @@ class sources(pdu.pdu):
             state = self.getState(source, cmd=cmd)
             cmd.inform(f'{source}={state},{self.elapsed(source)}')
 
-    def spinUntil(self, cmd, sourceName, desiredState, timeout=2):
+    def spinUntil(self, cmd, sourceName, desiredState, timeout=5):
         t0 = time.time()
         t1 = t0
         while t1-t0 < timeout:
@@ -78,6 +78,7 @@ class sources(pdu.pdu):
                 return True
             time.sleep(0.05)
             t1 = time.time()
+        cmd.warn(f'text="FAILED to switch {sourceName} to {desiredState} within {t1-t0} seconds"')
         return False
 
     def getState(self, source, cmd):
@@ -107,6 +108,30 @@ class sources(pdu.pdu):
         powerOff = dict([(self.powerPorts[name], 'off') for name in sources])
         return pdu.pdu.switching(self, cmd, powerOff)
 
+    def directSwitchOff(self, cmd, sources):
+        """Switch off source lamps
+
+        :param cmd: current command.
+        :param sourcesOn: light source lamp to switch on.
+        :type sourcesOn: list
+        :raise: Exception with warning message.
+        """
+
+        for source in sources:
+            cmd.debug(f'text="actually switching off outlet for {source}"')
+            outlet = self.powerPorts[source]
+            self.sendOneCommand('sw o%s off imme' % outlet, cmd=cmd)
+
+        for source in sources:
+            cmd.debug(f'text="checking outlet for {source}"')
+            ok = self.spinUntil(cmd, source, 'off', timeout=5)
+            if not ok:
+                raise RuntimeError(f"switch port {outlet} for lamp {source} did not turn off!")
+
+        cmd.debug(f'text="actually switched off outlets for {sources}"')
+        # self.portStatus(cmd)
+        return True
+
     def switchOn(self, cmd, sourcesOn):
         """Switch on source lamps
 
@@ -116,23 +141,26 @@ class sources(pdu.pdu):
         :raise: Exception with warning message.
         """
 
-        switched = []
         for source in sourcesOn:
             cmd.debug(f'text="actually switching on outlet for {source}"')
             outlet = self.powerPorts[source]
             self.warmupTime[source] = time.time()
             self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
-            ok = self.spinUntil(cmd, source, 'on', timeout=2)
+
+        switched = []
+        for source in sourcesOn:
+            cmd.debug(f'text="checking on outlet for {source}"')
+            ok = self.spinUntil(cmd, source, 'on', timeout=5)
             switched.append(source)
             if not ok:
                 try:
-                    self.switchOff(cmd, switched)
+                    self.directSwitchOff(cmd, switched)
                     switchedOff = True
                 except:
                     switchedOff = False
                 raise RuntimeError(f"switch port {outlet} for lamp {source} did not turn on! all ports switched back off: {switchedOff}")
 
-            # self.portStatus(cmd, outlet=outlet)
+        #self.portStatus(cmd, outlet=outlet)
         return True
 
     def warming(self, cmd, sourcesOn, warmingTime, ti=0.01):
