@@ -113,6 +113,20 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
 
         self.actor.instData.persistKey(wheel, position)
 
+    def initWheel(self, cmd, wheel):
+        """Init required wheel
+        :param cmd: current command.
+        :param wheel: linewheel|qthwheel
+        :param position: int(1-5)
+        :raise: Exception with warning message.
+        """
+        ret = self.sendOneCommand(f'{wheel} {-1}', cmd=cmd)
+        cmd.inform(f'text="{ret}"')
+
+        while 'Done' not in ret:
+            ret = self.getOneResponse(cmd=cmd)
+            cmd.inform(f'text="{ret}"')
+
     def createSock(self):
         """Create socket in operation, simulator otherwise.
         """

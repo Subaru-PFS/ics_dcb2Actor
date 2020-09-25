@@ -17,8 +17,9 @@ class FilterwheelCmd(object):
         #
         self.vocab = [
             ('filterwheel', 'status', self.status),
-            ('set', '<linewheel>', self.linewheel),
-            ('set', '<qthwheel>', self.qthwheel),
+            ('set', '@(<linewheel>|<qthwheel>)', self.moveWheel),
+            ('init', '@(linewheel|qthwheel)', self.initWheel),
+
         ]
 
         # Define typed command arguments for the above commands.
@@ -40,21 +41,20 @@ class FilterwheelCmd(object):
         self.controller.generate(cmd)
 
     @blocking
-    def linewheel(self, cmd):
+    def moveWheel(self, cmd):
         """set linewheel to required position."""
         cmdKeys = cmd.cmd.keywords
+        wheel = 'linewheel' if 'linewheel' in cmdKeys else 'qthwheel'
+        position = cmdKeys[wheel].values[0]
 
-        position = cmdKeys["linewheel"].values[0]
-
-        self.controller.moving(wheel="linewheel", position=position, cmd=cmd)
+        self.controller.moving(wheel=wheel, position=position, cmd=cmd)
         self.controller.generate(cmd)
 
     @blocking
-    def qthwheel(self, cmd):
-        """set qthwheel to required position."""
+    def initWheel(self, cmd):
+        """set linewheel to required position."""
         cmdKeys = cmd.cmd.keywords
+        wheel = 'linewheel' if 'linewheel' in cmdKeys else 'qthwheel'
 
-        position = cmdKeys["qthwheel"].values[0]
-
-        self.controller.moving(wheel="qthwheel", position=position, cmd=cmd)
+        self.controller.initWheel(wheel=wheel, cmd=cmd)
         self.controller.generate(cmd)
