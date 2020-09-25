@@ -23,8 +23,25 @@ class FilterwheelSim(socket.socket):
         """Send fake packets, append fake response to buffer."""
         time.sleep(0.02)
         cmdStr = cmdStr.decode()
-        self.buf.append('-.0014\n')
-        
+        cmdStr, __ = cmdStr.split('\r\n')
+        if 'adc' in cmdStr:
+            self.buf.append('-.0014\n')
+
+        elif 'linewheel' in cmdStr:
+            __, position = cmdStr.split('linewheel')
+            position = int(position)
+            self.buf.append('port0 = UL  port1 = LL\n')
+            self.buf.append('Setting FW 0 to position 1\nattached 2 filter wheel(s):\nindex 0: ID 0 Name EFW \n'
+                            'index 1: ID 1 Name EFW \nselecting 0 \n5 slots: 1 2 3 4 5 \ncurrent position: 1\n'
+                            f'Moving...\nMoved to position {position}\n')
+
+        elif 'qthwheel' in cmdStr:
+            __, position = cmdStr.split('qthwheel')
+            position = int(position)
+            self.buf.append('port0 = UL  port1 = LL\n')
+            self.buf.append('Setting FW 0 to position 1\nattached 2 filter wheel(s):\nindex 0: ID 0 Name EFW \n'
+                            'index 1: ID 1 Name EFW \nselecting 0 \n5 slots: 1 2 3 4 5 \ncurrent position: 1\n'
+                            f'Moving...\nMoved to position {position}\n')
 
     def recv(self, buffersize, flags=None):
         """Return and remove fake response from buffer."""

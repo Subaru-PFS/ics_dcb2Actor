@@ -16,6 +16,13 @@ class DcbActor(enuActor):
                           productName=productName,
                           configFile=configFile)
 
+    def connectionMade(self):
+        """Attach all controllers."""
+        if self.everConnected is False:
+            logging.info("Attaching all controllers...")
+            self.allControllers = [s.strip() for s in self.config.get(self.name, 'startingControllers').split(',')]
+            self.attachAllControllers()
+            self.everConnected = True
 
     def pfsDesignId(self, cmd):
         conf = configparser.ConfigParser()

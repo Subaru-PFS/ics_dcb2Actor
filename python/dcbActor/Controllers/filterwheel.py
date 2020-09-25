@@ -86,17 +86,32 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         """
         adc1 = self.sendOneCommand('adc 1', cmd=cmd)
         adc2 = self.sendOneCommand('adc 2', cmd=cmd)
+
+        linewheel, = self.actor.instData.loadKey('linewheel')
+        qthwheel, = self.actor.instData.loadKey('qthwheel')
+
         cmd.inform(f'adc={adc1},{adc2}')
+        cmd.inform(f'linewheel={linewheel}')
+        cmd.inform(f'qthwheel={qthwheel}')
 
-    def moving(self, cmd, powerPorts):
-        """Switch on/off powerPorts dictionary.
-
+    def moving(self, cmd, wheel, position):
+        """Move required wheel to required position
         :param cmd: current command.
-        :param powerPorts: dict(1=off, 2=on).
-        :type powerPorts: dict.
+        :param wheel: linewheel|qthwheel
+        :param position: int(1-5)
         :raise: Exception with warning message.
         """
-        pass
+        ret = self.sendOneCommand(f'{wheel} {position}', cmd=cmd)
+        cmd.inform(f'text="{ret}"')
+
+        while 'Moved to position' not in ret:
+            ret = self.getOneResponse(cmd=cmd)
+            cmd.inform(f'text="{ret}"')
+
+        __, position = ret.split('Moved to position')
+        position = int(position)
+
+        self.actor.instData.persistKey(wheel, position)
 
     def createSock(self):
         """Create socket in operation, simulator otherwise.

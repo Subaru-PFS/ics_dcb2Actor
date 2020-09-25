@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 import opscore.protocols.keys as keys
-from enuActor.utils.wrap import threaded
+import opscore.protocols.types as types
+from enuActor.utils.wrap import threaded, blocking
 
 
 class FilterwheelCmd(object):
@@ -16,10 +17,14 @@ class FilterwheelCmd(object):
         #
         self.vocab = [
             ('filterwheel', 'status', self.status),
+            ('set', '<linewheel>', self.linewheel),
+            ('set', '<qthwheel>', self.qthwheel),
         ]
 
         # Define typed command arguments for the above commands.
         self.keys = keys.KeysDictionary("dcb__filterwheel", (1, 1),
+                                        keys.Key('linewheel', types.Int(), help='line wheel position (1-5)'),
+                                        keys.Key('qthwheel', types.Int(), help='qth wheel position (1-5)'),
                                         )
 
     @property
@@ -32,4 +37,24 @@ class FilterwheelCmd(object):
     @threaded
     def status(self, cmd):
         """Report state, mode, status."""
+        self.controller.generate(cmd)
+
+    @blocking
+    def linewheel(self, cmd):
+        """set linewheel to required position."""
+        cmdKeys = cmd.cmd.keywords
+
+        position = cmdKeys["linewheel"].values[0]
+
+        self.controller.moving(wheel="linewheel", position=position, cmd=cmd)
+        self.controller.generate(cmd)
+
+    @blocking
+    def qthwheel(self, cmd):
+        """set qthwheel to required position."""
+        cmdKeys = cmd.cmd.keywords
+
+        position = cmdKeys["qthwheel"].values[0]
+
+        self.controller.moving(wheel="qthwheel", position=position, cmd=cmd)
         self.controller.generate(cmd)
