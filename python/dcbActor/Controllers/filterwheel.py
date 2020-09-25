@@ -1,0 +1,109 @@
+__author__ = 'alefur'
+
+import logging
+
+import enuActor.utils.bufferedSocket as bufferedSocket
+from dcbActor.Simulators.filterwheel import FilterwheelSim
+from enuActor.utils.fsmThread import FSMThread
+
+
+class filterwheel(FSMThread, bufferedSocket.EthComm):
+
+    def __init__(self, actor, name, loglevel=logging.DEBUG):
+        """This sets up the connections to/from the hub, the logger, and the twisted reactor.
+
+        :param actor: enuActor.
+        :param name: controller name.
+        :type name: str
+        """
+        substates = ['IDLE', 'MOVING', 'FAILED']
+        events = [{'name': 'move', 'src': 'IDLE', 'dst': 'MOVING'},
+                  {'name': 'idle', 'src': ['MOVING', ], 'dst': 'IDLE'},
+                  {'name': 'fail', 'src': ['MOVING', ], 'dst': 'FAILED'},
+                  ]
+
+        FSMThread.__init__(self, actor, name, events=events, substates=substates, doInit=True)
+
+        self.addStateCB('MOVING', self.moving)
+        self.sim = FilterwheelSim()
+
+        self.logger = logging.getLogger(self.name)
+        self.logger.setLevel(loglevel)
+
+    @property
+    def simulated(self):
+        """Return True if self.mode=='simulation', return False if self.mode='operation'."""
+        if self.mode == 'simulation':
+            return True
+        elif self.mode == 'operation':
+            return False
+        else:
+            raise ValueError('unknown mode')
+
+    def _loadCfg(self, cmd, mode=None):
+        """Load filterwheel configuration.
+
+        :param cmd: current command.
+        :param mode: operation|simulation, loaded from config file if None.
+        :type mode: str
+        :raise: Exception if config file is badly formatted.
+        """
+        self.mode = self.actor.config.get('filterwheel', 'mode') if mode is None else mode
+        bufferedSocket.EthComm.__init__(self,
+                                        host=self.actor.config.get('filterwheel', 'host'),
+                                        port=int(self.actor.config.get('filterwheel', 'port')),
+                                        EOL='\r\n')
+
+    def _openComm(self, cmd):
+        """Open socket with filterwheel controller or simulate it.
+
+        :param cmd: current command.
+        :raise: socket.error if the communication has failed.
+        """
+        self.ioBuffer = bufferedSocket.BufferedSocket(self.name + 'IO', EOL='\n')
+        s = self.connectSock()
+
+    def _closeComm(self, cmd):
+        """Close socket.
+
+        :param cmd: current command.
+        """
+        self.closeSock()
+
+    def _testComm(self, cmd):
+        """Test communication.
+
+        :param cmd: current command.
+        :raise: Exception if the communication has failed with the controller.
+        """
+        return self.sendOneCommand('adc 1', cmd=cmd)
+
+    def getStatus(self, cmd):
+        """Get all ports status.
+
+        :param cmd: current command.
+        :raise: Exception with warning message.
+        """
+        adc1 = self.sendOneCommand('adc 1', cmd=cmd)
+        adc2 = self.sendOneCommand('adc 2', cmd=cmd)
+        cmd.inform(f'adc={adc1},{adc2}')
+
+    def moving(self, cmd, powerPorts):
+        """Switch on/off powerPorts dictionary.
+
+        :param cmd: current command.
+        :param powerPorts: dict(1=off, 2=on).
+        :type powerPorts: dict.
+        :raise: Exception with warning message.
+        """
+        pass
+
+    def createSock(self):
+        """Create socket in operation, simulator otherwise.
+        """
+        if self.simulated:
+            s = self.sim
+        else:
+            s = bufferedSocket.EthComm.createSock(self)
+
+        return s
