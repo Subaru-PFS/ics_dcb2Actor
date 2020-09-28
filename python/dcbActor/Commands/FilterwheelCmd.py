@@ -19,6 +19,7 @@ class FilterwheelCmd(object):
             ('filterwheel', 'status', self.status),
             ('set', '@(<linewheel>|<qthwheel>)', self.moveWheel),
             ('init', '@(linewheel|qthwheel)', self.initWheel),
+            ('adc', 'calib', self.adcCalib)
 
         ]
 
@@ -57,4 +58,13 @@ class FilterwheelCmd(object):
         wheel = 'linewheel' if 'linewheel' in cmdKeys else 'qthwheel'
 
         self.controller.initWheel(wheel=wheel, cmd=cmd)
+        self.controller.generate(cmd)
+
+    @blocking
+    def adcCalib(self, cmd):
+        """set linewheel to required position."""
+        cmdKeys = cmd.cmd.keywords
+        wheel = 'linewheel' if 'linewheel' in cmdKeys else 'qthwheel'
+
+        self.controller.adcCalib(cmd=cmd)
         self.controller.generate(cmd)

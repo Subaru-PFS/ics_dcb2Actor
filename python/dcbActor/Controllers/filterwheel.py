@@ -127,6 +127,21 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
             ret = self.getOneResponse(cmd=cmd)
             cmd.inform(f'text="{ret}"')
 
+    def adcCalib(self, cmd):
+        """zeros adc channels.
+        :param cmd: current command.
+        :raise: Exception with warning message.
+        """
+        ret = self.sendOneCommand('adccalib ', cmd=cmd)
+        cmd.inform(f'text="{ret}"')
+
+        ret = self.sendOneCommand('continue ', cmd=cmd)
+        cmd.inform(f'text="{ret}"')
+
+        while 'Zeros for channel' not in ret:
+            ret = self.getOneResponse(cmd=cmd)
+            cmd.inform(f'text="{ret}"')
+
     def createSock(self):
         """Create socket in operation, simulator otherwise.
         """
