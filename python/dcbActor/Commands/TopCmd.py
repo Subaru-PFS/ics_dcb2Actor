@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 
-import configparser
-
+import dcbActor.utils.makeLamDesign as lamConfig
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 
@@ -97,13 +96,13 @@ class TopCmd(object):
 
     def configFibers(self, cmd):
         cmdKeys = cmd.cmd.keywords
-        fibers = cmdKeys['fibers'].values
+        fibers = [fib.strip() for fib in cmdKeys['fibers'].values]
 
-        conf = configparser.ConfigParser()
-        conf.read_file(open(self.actor.config.get('dcb', 'fiberConfig')))
-        strFibers = ','.join([fib.strip() for fib in fibers])
-        conf.set('current', 'fibers', strFibers)
-        conf.write(open(self.actor.config.get('dcb', 'fiberConfig'), 'w'))
+        for fiber in fibers:
+            if fiber not in lamConfig.FIBER_COLORS:
+                raise KeyError(f'{fiber} not in {",".join(lamConfig.FIBER_COLORS)}')
+
+        self.actor.instData.persistKey('fiberConfig', *fibers)
         self.actor.pfsDesignId(cmd=cmd)
 
         cmd.finish()

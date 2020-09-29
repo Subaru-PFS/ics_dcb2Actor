@@ -25,13 +25,13 @@ class DcbActor(enuActor):
             self.everConnected = True
 
     def pfsDesignId(self, cmd):
-        conf = configparser.ConfigParser()
-        conf.read_file(open(self.config.get(self.name, 'fiberConfig')))
-        fibers = [fib.strip() for fib in conf.get('current', 'fibers').split(',')]
-        pfiDesignId = lamConfig.hashColors(fibers)
-
-        cmd.inform('fiberConfig="%s"' % ';'.join(fibers))
-        cmd.inform('designId=0x%016x' % pfiDesignId)
+        try:
+            fibers = self.instData.loadKey('fiberConfig')
+            pfiDesignId = lamConfig.hashColors(fibers)
+            cmd.inform('fiberConfig="%s"' % ';'.join(fibers))
+            cmd.inform('designId=0x%016x' % pfiDesignId)
+        except:
+            cmd.warn('text="could not load fiberConfig from instdata')
 
 
 def main():
