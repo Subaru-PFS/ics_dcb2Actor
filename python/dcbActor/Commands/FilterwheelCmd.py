@@ -48,6 +48,9 @@ class FilterwheelCmd(object):
         wheel = 'linewheel' if 'linewheel' in cmdKeys else 'qthwheel'
         position = cmdKeys[wheel].values[0]
 
+        if not 1 <= position <= 5:
+            raise ValueError('Wheel positions are within 1-5')
+
         self.controller.moving(wheel=wheel, position=position, cmd=cmd)
         self.controller.generate(cmd)
 
