@@ -87,8 +87,17 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         adc1 = self.sendOneCommand('adc 1', cmd=cmd)
         adc2 = self.sendOneCommand('adc 2', cmd=cmd)
 
-        linewheel, = self.actor.instData.loadKey('linewheel')
-        qthwheel, = self.actor.instData.loadKey('qthwheel')
+        try:
+            linewheel, = self.actor.instData.loadKey('linewheel')
+        except:
+            #a bit of flexibility, to be removed later
+            linewheel = -1
+
+        try:
+            qthwheel, = self.actor.instData.loadKey('qthwheel')
+        except:
+            #a bit of flexibility, to be removed later
+            qthwheel = -1
 
         cmd.inform(f'adc={adc1},{adc2}')
         cmd.inform(f'linewheel={linewheel}')
@@ -126,6 +135,8 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         while 'Done' not in ret:
             ret = self.getOneResponse(cmd=cmd)
             cmd.inform(f'text="{ret}"')
+
+        self.actor.instData.persistKey(wheel, 1)
 
     def adcCalib(self, cmd):
         """zeros adc channels.

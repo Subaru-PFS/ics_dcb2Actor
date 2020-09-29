@@ -26,7 +26,7 @@ class DcbActor(enuActor):
 
     def pfsDesignId(self, cmd):
         conf = configparser.ConfigParser()
-        conf.read_file(open(self.config.get('dcb', 'fiberConfig')))
+        conf.read_file(open(self.config.get(self.name, 'fiberConfig')))
         fibers = [fib.strip() for fib in conf.get('current', 'fibers').split(',')]
         pfiDesignId = lamConfig.hashColors(fibers)
 
