@@ -32,6 +32,7 @@ class SourcesSim(socket.socket):
 
         if 'prepare' in cmdStr:
             lampsArgs = cmdStr.split(' ')[1:]
+            self.config.clear()
             for i in range(int(len(lampsArgs) / 2)):
                 self.config[lampsArgs[2 * i]] = float(lampsArgs[2 * i + 1])
             time.sleep(0.1)
