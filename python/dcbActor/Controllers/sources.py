@@ -3,15 +3,14 @@ __author__ = 'alefur'
 import logging
 import time
 
-from dcbActor.Controllers import pdu
-from enuActor.Simulators.pdu import PduSim
-from enuActor.utils import wait
+import enuActor.utils.bufferedSocket as bufferedSocket
+from dcbActor.Simulators.sources import SourcesSim
+from dcbActor.utils.lampStates import LampStates
 from enuActor.utils.fsmThread import FSMThread
 
 
-class sources(pdu.pdu):
-    warmingTime = dict(hgar=15, neon=15, krypton=15, argon=15, halogen=60)
-    names = warmingTime.keys()
+class sources(FSMThread, bufferedSocket.EthComm):
+    warmingTimes = dict(hgar=15, neon=15, xenon=15, krypton=15, argon=15, qth=60, halogen=60)
 
     def __init__(self, actor, name, loglevel=logging.DEBUG):
         """This sets up the connections to/from the hub, the logger, and the twisted reactor.
@@ -20,196 +19,205 @@ class sources(pdu.pdu):
         :param name: controller name.
         :type name: str
         """
-        substates = ['IDLE', 'WARMING', 'FAILED']
+        substates = ['IDLE', 'WARMING', 'TRIGGERING', 'FAILED']
         events = [{'name': 'warming', 'src': 'IDLE', 'dst': 'WARMING'},
-                  {'name': 'idle', 'src': ['WARMING', ], 'dst': 'IDLE'},
-                  {'name': 'fail', 'src': ['WARMING', ], 'dst': 'FAILED'},
+                  {'name': 'triggering', 'src': 'IDLE', 'dst': 'TRIGGERING'},
+                  {'name': 'idle', 'src': ['WARMING', 'TRIGGERING', ], 'dst': 'IDLE'},
+                  {'name': 'fail', 'src': ['WARMING', 'TRIGGERING', ], 'dst': 'FAILED'},
                   ]
 
         FSMThread.__init__(self, actor, name, events=events, substates=substates, doInit=True)
 
-        self.addStateCB('WARMING', self.warming)
-        self.sim = PduSim()
-        self.warmupTime = dict()
+        self.addStateCB('WARMING', self.warmup)
+        self.addStateCB('TRIGGERING', self.doGo)
+        self.sim = SourcesSim()
+
+        self.monitor = 0
         self.abortWarmup = False
+        self.config = dict()
+        self.outletConfig = dict()
 
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(loglevel)
 
     @property
+    def simulated(self):
+        """Return True if self.mode=='simulation', return False if self.mode='operation'."""
+        if self.mode == 'simulation':
+            return True
+        elif self.mode == 'operation':
+            return False
+        else:
+            raise ValueError('unknown mode')
+
+    @property
+    def lampNames(self):
+        return list(self.outletConfig.values())
+
+    @property
     def sourcesOn(self):
-        return [source for source in self.names if not self.isOff(source)]
+        return [lamp for lamp in self.lampNames if self.lampsState[lamp].lampOn]
 
     def _loadCfg(self, cmd, mode=None):
-        """Load iis configuration.
+        """Load sources configuration.
 
         :param cmd: current command.
         :param mode: operation|simulation, loaded from config file if None.
         :type mode: str
         :raise: Exception if config file is badly formatted.
         """
-        mode = self.actor.config.get('sources', 'mode') if mode is None else mode
-        pdu.pdu._loadCfg(self, cmd=cmd, mode=mode)
+        self.mode = self.actor.config.get('sources', 'mode') if mode is None else mode
 
-        for source in sources.names:
-            if source not in self.powerPorts.keys():
-                raise ValueError(f'{source} : unknown source')
+        bufferedSocket.EthComm.__init__(self,
+                                        host=self.actor.config.get('sources', 'host'),
+                                        port=int(self.actor.config.get('sources', 'port')),
+                                        EOL='\r\n')
 
-    def getStatus(self, cmd, names=None):
-        """Get and generate iis keywords.
+
+    def _openComm(self, cmd):
+        """Open socket with sources controller or simulate it.
+
+        :param cmd: current command.
+        :raise: socket.error if the communication has failed.
+        """
+        self.ioBuffer = bufferedSocket.BufferedSocket(self.name + 'IO', EOL='tcpover\n')
+        s = self.connectSock()
+
+    def _closeComm(self, cmd):
+        """Close socket.
+
+        :param cmd: current command.
+        """
+        self.closeSock()
+
+    def _testComm(self, cmd):
+        """Test communication.
+
+        :param cmd: current command.
+        :raise: Exception if the communication has failed with the controller.
+        """
+        self.getOutletsConfig(cmd)
+        self.lampsState = LampStates(self.lampNames)
+
+    def getStatus(self, cmd):
+        """Get all ports status.
 
         :param cmd: current command.
         :raise: Exception with warning message.
         """
+        states = self.sendOneCommand('getState', cmd=cmd, doClose=True)
 
-        if names is None:
-            names = sources.names
-        for source in names:
-            state = self.getState(source, cmd=cmd)
-            cmd.inform(f'{source}={state},{self.elapsed(source)}')
+        for state in states.split(','):
+            self.lampsState.genKeys(cmd, state)
 
-    def spinUntil(self, cmd, sourceName, desiredState, timeout=5):
-        t0 = time.time()
-        t1 = t0
-        while t1-t0 < timeout:
-            state = self.sendOneCommand('read status o%s simple' % self.powerPorts[sourceName], cmd=cmd)
-            cmd.debug(f'text="{sourceName}={state}"')
-            if state == desiredState:
-                return True
-            time.sleep(0.05)
-            t1 = time.time()
-        cmd.warn(f'text="FAILED to switch {sourceName} to {desiredState} within {t1-t0} seconds"')
-        return False
-
-    def getState(self, source, cmd):
-        """Get current light source state.
+    def getOutletsConfig(self, cmd):
+        """Get all ports status.
 
         :param cmd: current command.
         :raise: Exception with warning message.
         """
-        state = self.sendOneCommand('read status o%s simple' % self.powerPorts[source], cmd=cmd)
-        if state == 'pending':
-            wait(secs=2)
-            return self.getState(source, cmd=cmd)
+        outlets = self.sendOneCommand('getOutletsConfig', cmd=cmd, doClose=True)
 
-        return state
+        for ret in outlets.split(','):
+            cmd.inform(ret)
+            outlet, lamp = [r.strip() for r in ret.split('=')]
+            self.outletConfig[outlet] = lamp
+        cmd.inform(f'lampNames={",".join(self.lampNames)}')
 
-    def switchOff(self, cmd, sources):
-        """Switch on/off sources dictionary.
 
-        :param cmd: current command.
-        :param powerPorts: list(hgar,neon).
-        :type powerPorts: list.
-        :raise: Exception with warning message.
-        """
-        for source in sources:
-            self.warmupTime.pop(source, None)
-
-        powerOff = dict([(self.powerPorts[name], 'off') for name in sources])
-        return pdu.pdu.switching(self, cmd, powerOff)
-
-    def directSwitchOff(self, cmd, sources):
-        """Switch off source lamps
+    def warmup(self, cmd, lamps, warmingTime=None):
+        """warm up lamps list
 
         :param cmd: current command.
-        :param sourcesOn: light source lamp to switch on.
-        :type sourcesOn: list
+        :param lamps: ['hgar', 'neon']
+        :type lamps: list.
         :raise: Exception with warning message.
         """
-
-        for source in sources:
-            cmd.debug(f'text="actually switching off outlet for {source}"')
-            outlet = self.powerPorts[source]
-            self.sendOneCommand('sw o%s off imme' % outlet, cmd=cmd)
-
-        for source in sources:
-            cmd.debug(f'text="checking outlet for {source}"')
-            ok = self.spinUntil(cmd, source, 'off', timeout=5)
-            if not ok:
-                raise RuntimeError(f"switch port {outlet} for lamp {source} did not turn off!")
-
-        cmd.debug(f'text="actually switched off outlets for {sources}"')
-        # self.portStatus(cmd)
-        return True
-
-    def switchOn(self, cmd, sourcesOn):
-        """Switch on source lamps
-
-        :param cmd: current command.
-        :param sourcesOn: light source lamp to switch on.
-        :type sourcesOn: list
-        :raise: Exception with warning message.
-        """
-
-        for source in sourcesOn:
-            cmd.debug(f'text="actually switching on outlet for {source}"')
-            outlet = self.powerPorts[source]
-            self.warmupTime[source] = time.time()
-            self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
-
-        switched = []
-        for source in sourcesOn:
-            cmd.debug(f'text="checking on outlet for {source}"')
-            ok = self.spinUntil(cmd, source, 'on', timeout=5)
-            switched.append(source)
-            if not ok:
-                try:
-                    self.directSwitchOff(cmd, switched)
-                    switchedOff = True
-                except:
-                    switchedOff = False
-                raise RuntimeError(f"switch port {outlet} for lamp {source} did not turn on! all ports switched back off: {switchedOff}")
-
-        #self.portStatus(cmd, outlet=outlet)
-        return True
-
-    def warming(self, cmd, sourcesOn, warmingTime, ti=0.01):
-        """Switch on source lamp and wait for iis.warmingTime.
-
-        :param cmd: current command.
-        :param sourcesOn: light source lamp to switch on.
-        :type sourcesOn: list
-        :raise: Exception with warning message.
-        """
-        start = time.time()
         self.abortWarmup = False
 
-        for source in sourcesOn:
-            if self.isOff(source):
-                outlet = self.powerPorts[source]
-                self.warmupTime[source] = time.time()
-                self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
-                self.portStatus(cmd, outlet=outlet)
+        for lamp in lamps:
+            if lamp not in self.sourcesOn:
+                state = self.sendOneCommand(f'switch {lamp} on', doClose=True, cmd=cmd)
+                self.lampsState.genKeys(cmd, state, genTimeStamp=True)
 
-        while time.time() < start + warmingTime:
+        toBeWarmed = lamps if lamps else self.sourcesOn
+        warmingTimes = [sources.warmingTimes[lamp] for lamp in toBeWarmed] if warmingTime is None else len(toBeWarmed) * [warmingTime]
+        remainingTimes = [t - self.lampsState.elapsed(lamp) for t, lamp in zip(warmingTimes, toBeWarmed)]
+
+        sleepTime = max(remainingTimes) if remainingTimes else 0
+
+        if sleepTime > 0:
+            cmd.inform(f'text="warmingTime:{max(warmingTimes)} secs now sleeping for {sleepTime}'"")
+            self.wait(time.time() + sleepTime)
+
+    def switchOff(self, cmd, lamps):
+        """Switch off lamp list.
+
+        :param cmd: current command.
+        :param lamps: ['hgar', 'neon']
+        :type lamps: list.
+        :raise: Exception with warning message.
+        """
+        for lamp in lamps:
+            state = self.sendOneCommand(f'switch {lamp} off', doClose=True, cmd=cmd)
+            self.lampsState.genKeys(cmd, state, genTimeStamp=True)
+
+    def prepare(self, cmd):
+        """Configure a future illumination sequence.
+
+        :param cmd: current command.
+        :raise: Exception with warning message.
+        """
+        cmdStr = f'prepare {" ".join(sum([[lamp, str(time)] for lamp, time in self.config.items()], []))}'
+        return self.sendOneCommand(cmdStr, doClose=True, cmd=cmd)
+
+    def doGo(self, cmd):
+        """Run the preconfigured illumination sequence.
+
+        :param cmd: current command.
+        :raise: Exception with warning message.
+        """
+        timeout = max(self.config.values())
+        timeLim = time.time() + timeout + 15
+        replies = bufferedSocket.EthComm.sendOneCommand(self, cmdStr='go', cmd=cmd).split('\n')
+        states = replies[-1]
+
+        for reply in replies[:len(replies) - 1]:
+            cmd.inform(f'text="{reply}"')
+
+        for state in states.split(','):
+            self.lampsState.genKeys(cmd, state)
+
+        reply = self.getOneResponse(cmd=cmd, timeout=timeout)
+
+        while ';;' not in reply:
+            if reply:
+                self.lampsState.genKeys(cmd, reply, genTimeStamp=True)
+
+            reply = self.getOneResponse(cmd=cmd, timeout=timeout)
+            if time.time() > timeLim:
+                raise TimeoutError('lamps has not been triggered correctly')
+
+        status, ret = reply.split(';;')
+
+        if status != 'OK':
+            raise RuntimeError(ret)
+
+        for state in ret.split(','):
+            self.lampsState.genKeys(cmd, state)
+
+        self.closeSock()
+
+    def wait(self, end, ti=0.01):
+        """ Wait until time.time() >end.
+
+        :param end: nb of secs since epoch.
+        """
+        while time.time() < end:
             time.sleep(ti)
             self.handleTimeout()
             if self.abortWarmup:
                 raise UserWarning('sources warmup aborted')
-
-    def isOff(self, source):
-        """Check if light source is currently off.
-
-        :param source: source name.
-        :type source: str
-        :return: state
-        :rtype: bool
-        """
-        state, __ = self.actor.models[self.actor.name].keyVarDict[source].getValue()
-        return not bool(state)
-
-    def elapsed(self, source):
-        """Check for how much time source has been powered on.
-
-        :param source: source name.
-        :type source: str
-        :return: elapsed time
-        :rtype: float
-        """
-        try:
-            return int(round(time.time() - self.warmupTime[source]))
-        except KeyError:
-            return 0
 
     def doAbort(self):
         """Abort warmup.
@@ -219,18 +227,29 @@ class sources(pdu.pdu):
             pass
         return
 
-    def leaveCleanly(self, cmd):
-        """Clear and leave.
+    def sendOneCommand(self, cmdStr, doClose=False, cmd=None):
+        """Send one command and return one response.
 
+        :param cmdStr: string to send.
+        :param doClose: If True (the default), the device socket is closed before returning.
         :param cmd: current command.
+        :return: reply : the single response string, with EOLs stripped.
+        :raise: IOError : from any communication errors.
         """
-        self.monitor = 0
-        self.doAbort()
+        reply = bufferedSocket.EthComm.sendOneCommand(self, cmdStr=cmdStr, doClose=doClose, cmd=cmd)
+        status, ret = reply.split(';;')
 
-        try:
-            self.switchOff(cmd, self.names)
-            self.getStatus(cmd)
-        except Exception as e:
-            cmd.warn('text=%s' % self.actor.strTraceback(e))
+        if status != 'OK':
+            raise RuntimeError(ret)
 
-        self._closeComm(cmd=cmd)
+        return ret
+
+    def createSock(self):
+        """Create socket in operation, simulator otherwise.
+        """
+        if self.simulated:
+            s = self.sim
+        else:
+            s = bufferedSocket.EthComm.createSock(self)
+
+        return s
