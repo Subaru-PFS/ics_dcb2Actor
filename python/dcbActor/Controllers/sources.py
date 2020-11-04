@@ -5,7 +5,7 @@ import time
 
 import enuActor.utils.bufferedSocket as bufferedSocket
 from dcbActor.Simulators.sources import SourcesSim
-from dcbActor.utils.lampStates import LampStates
+from dcbActor.utils.lampState import LampState
 from enuActor.utils.fsmThread import FSMThread
 
 
@@ -36,6 +36,7 @@ class sources(FSMThread, bufferedSocket.EthComm):
         self.abortWarmup = False
         self.config = dict()
         self.outletConfig = dict()
+        self.lampStates = dict()
 
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(loglevel)
@@ -56,7 +57,7 @@ class sources(FSMThread, bufferedSocket.EthComm):
 
     @property
     def sourcesOn(self):
-        return [lamp for lamp in self.lampNames if self.lampsState[lamp].lampOn]
+        return [lamp for lamp in self.lampNames if self.lampStates[lamp].lampOn]
 
     def _loadCfg(self, cmd, mode=None):
         """Load sources configuration.
@@ -72,7 +73,6 @@ class sources(FSMThread, bufferedSocket.EthComm):
                                         host=self.actor.config.get('sources', 'host'),
                                         port=int(self.actor.config.get('sources', 'port')),
                                         EOL='\r\n')
-
 
     def _openComm(self, cmd):
         """Open socket with sources controller or simulate it.
@@ -97,7 +97,14 @@ class sources(FSMThread, bufferedSocket.EthComm):
         :raise: Exception if the communication has failed with the controller.
         """
         self.getOutletsConfig(cmd)
-        self.lampsState = LampStates(self.lampNames)
+
+    def _init(self, cmd):
+        """Instanciate lampState for each lamp and switch them off by safety."""
+
+        for lamp in self.lampNames:
+            self.lampStates[lamp] = LampState()
+
+        self.switchOff(cmd, self.lampNames)
 
     def getStatus(self, cmd):
         """Get all ports status.
@@ -106,9 +113,29 @@ class sources(FSMThread, bufferedSocket.EthComm):
         :raise: Exception with warning message.
         """
         states = self.sendOneCommand('getState', cmd=cmd, doClose=True)
+        self.genAllKeys(cmd, states)
 
-        for state in states.split(','):
-            self.lampsState.genKeys(cmd, state)
+    def genKeys(self, cmd, lampState, genTimeStamp=False):
+        """ Generate one lamp keywords.
+
+        :param cmd: current command.
+        :param lampState: single lamp state
+        :raise: Exception with warning message.
+        """
+        lamp, state = [r.strip() for r in lampState.split('=')]
+        self.lampStates[lamp].setState(state, genTimeStamp=genTimeStamp)
+
+        cmd.inform(f'{lamp}={str(self.lampStates[lamp])}')
+
+    def genAllKeys(self, cmd, states, genTimeStamp=False):
+        """ Generate all lamps keywords.
+
+        :param cmd: current command.
+        :param states: all lamp states
+        :raise: Exception with warning message.
+        """
+        for lampState in states.split(','):
+            self.genKeys(cmd, lampState, genTimeStamp=genTimeStamp)
 
     def getOutletsConfig(self, cmd):
         """Get all ports status.
@@ -122,8 +149,9 @@ class sources(FSMThread, bufferedSocket.EthComm):
             cmd.inform(ret)
             outlet, lamp = [r.strip() for r in ret.split('=')]
             self.outletConfig[outlet] = lamp
-        cmd.inform(f'lampNames={",".join(self.lampNames)}')
 
+        cmd.inform(f'lampNames={",".join(self.lampNames)}')
+        return self.lampNames
 
     def warmup(self, cmd, lamps, warmingTime=None):
         """warm up lamps list
@@ -137,12 +165,12 @@ class sources(FSMThread, bufferedSocket.EthComm):
 
         for lamp in lamps:
             if lamp not in self.sourcesOn:
-                state = self.sendOneCommand(f'switch {lamp} on', doClose=True, cmd=cmd)
-                self.lampsState.genKeys(cmd, state, genTimeStamp=True)
+                lampState = self.sendOneCommand(f'switch {lamp} on', doClose=True, cmd=cmd)
+                self.genKeys(cmd, lampState, genTimeStamp=True)
 
         toBeWarmed = lamps if lamps else self.sourcesOn
         warmingTimes = [sources.warmingTimes[lamp] for lamp in toBeWarmed] if warmingTime is None else len(toBeWarmed) * [warmingTime]
-        remainingTimes = [t - self.lampsState.elapsed(lamp) for t, lamp in zip(warmingTimes, toBeWarmed)]
+        remainingTimes = [t - self.lampStates[lamp].elapsed() for t, lamp in zip(warmingTimes, toBeWarmed)]
 
         sleepTime = max(remainingTimes) if remainingTimes else 0
 
@@ -159,8 +187,8 @@ class sources(FSMThread, bufferedSocket.EthComm):
         :raise: Exception with warning message.
         """
         for lamp in lamps:
-            state = self.sendOneCommand(f'switch {lamp} off', doClose=True, cmd=cmd)
-            self.lampsState.genKeys(cmd, state, genTimeStamp=True)
+            lampState = self.sendOneCommand(f'switch {lamp} off', doClose=True, cmd=cmd)
+            self.genKeys(cmd, lampState, genTimeStamp=True)
 
     def prepare(self, cmd):
         """Configure a future illumination sequence.
@@ -185,14 +213,13 @@ class sources(FSMThread, bufferedSocket.EthComm):
         for reply in replies[:len(replies) - 1]:
             cmd.inform(f'text="{reply}"')
 
-        for state in states.split(','):
-            self.lampsState.genKeys(cmd, state)
+        self.genAllKeys(cmd, states)
 
         reply = self.getOneResponse(cmd=cmd, timeout=timeout)
 
         while ';;' not in reply:
             if reply:
-                self.lampsState.genKeys(cmd, reply, genTimeStamp=True)
+                self.genKeys(cmd, reply, genTimeStamp=True)
 
             reply = self.getOneResponse(cmd=cmd, timeout=timeout)
             if time.time() > timeLim:
@@ -203,10 +230,9 @@ class sources(FSMThread, bufferedSocket.EthComm):
         if status != 'OK':
             raise RuntimeError(ret)
 
-        for state in ret.split(','):
-            self.lampsState.genKeys(cmd, state)
+        self.genAllKeys(cmd, states)
 
-        self.closeSock()
+        self._closeComm(cmd)
 
     def wait(self, end, ti=0.01):
         """ Wait until time.time() >end.
@@ -253,3 +279,20 @@ class sources(FSMThread, bufferedSocket.EthComm):
             s = bufferedSocket.EthComm.createSock(self)
 
         return s
+
+    def leaveCleanly(self, cmd):
+        """Clear and leave.
+
+        :param cmd: current command.
+        """
+        self.monitor = 0
+        self.doAbort()
+        print('bye bye')
+
+        try:
+            self.switchOff(cmd, self.lampNames)
+            self.getStatus(cmd)
+        except Exception as e:
+            cmd.warn('text=%s' % self.actor.strTraceback(e))
+
+        self._closeComm(cmd=cmd)
