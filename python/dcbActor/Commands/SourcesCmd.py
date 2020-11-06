@@ -4,6 +4,7 @@ import time
 
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
+from enuActor.utils import waitForTcpServer
 from enuActor.utils.wrap import threaded, blocking, singleShot
 
 
@@ -24,6 +25,8 @@ class SourcesCmd(object):
             ('sources', 'abort', self.abort),
             ('sources', 'prepare [<halogen>] [<argon>] [<hgar>] [<neon>] [<krypton>]', self.prepare),
             ('sources', 'go [<delay>]', self.go),
+            ('sources', 'stop', self.stop),
+            ('sources', 'start [@(operation|simulation)]', self.start),
         ]
 
         self.vocab += [('arc', cmdStr, func) for __, cmdStr, func in self.vocab]
@@ -151,4 +154,26 @@ class SourcesCmd(object):
 
         self.controller.substates.triggering(cmd)
 
+        cmd.finish()
+
+    @singleShot
+    def stop(self, cmd):
+        """Abort iis warmup, turn iis lamp off and disconnect."""
+        self.actor.disconnect('sources', cmd=cmd)
+        cmd.finish()
+
+    @singleShot
+    def start(self, cmd):
+        """Wait for pdu host, connect iis controller."""
+        cmdKeys = cmd.cmd.keywords
+        mode = self.actor.config.get('sources', 'mode')
+        host = self.actor.config.get('sources', 'host')
+        port = self.actor.config.get('sources', 'port')
+        mode = 'operation' if 'operation' in cmdKeys else mode
+        mode = 'simulation' if 'simulation' in cmdKeys else mode
+
+        waitForTcpServer(host=host, port=port, cmd=cmd, mode=mode)
+
+        cmd.inform('text="connecting sources..."')
+        self.actor.connect('sources', cmd=cmd, mode=mode)
         cmd.finish()

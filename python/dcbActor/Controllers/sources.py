@@ -287,7 +287,6 @@ class sources(FSMThread, bufferedSocket.EthComm):
         """
         self.monitor = 0
         self.doAbort()
-        print('bye bye')
 
         try:
             self.switchOff(cmd, self.lampNames)
