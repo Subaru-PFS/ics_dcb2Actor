@@ -205,8 +205,8 @@ class sources(FSMThread, bufferedSocket.EthComm):
         :param cmd: current command.
         :raise: Exception with warning message.
         """
-        timeout = max(self.config.values())
-        timeLim = time.time() + timeout + 15
+        timeout = max(self.config.values()) + 2
+        timeLim = time.time() + timeout + 10
         replies = bufferedSocket.EthComm.sendOneCommand(self, cmdStr='go', cmd=cmd).split('\n')
         states = replies[-1]
 

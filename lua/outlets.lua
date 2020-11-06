@@ -1,6 +1,6 @@
 #!/usr/bin/env lua
 
-local lnames={"neon", "argon", "krypton", "hgar", "halogen"}
+local lnames={"halogen", "neon", "hgar", "argon", "krypton"}
 local loutlets={ 1, 2, 3, 4, 5}
 
 
