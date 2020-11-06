@@ -19,7 +19,7 @@ class SourcesCmd(object):
         #
         self.vocab = [
             ('sources', 'status', self.status),
-            ('sources', '[<on>] [<warmingTime>]', self.warmup),
+            ('sources', '[<on>] [<warmingTime>] [force]', self.warmup),
             ('sources', '<off>', self.switchOff),
             ('sources', 'abort', self.abort),
             ('sources', 'prepare [<halogen>] [<argon>] [<hgar>] [<neon>] [<krypton>]', self.prepare),
@@ -76,6 +76,7 @@ class SourcesCmd(object):
         cmdKeys = cmd.cmd.keywords
         sourcesOn = cmdKeys['on'].values if 'on' in cmdKeys else []
         warmingTime = cmdKeys['warmingTime'].values[0] if 'warmingTime' in cmdKeys else None
+        warmingTime = 0 if 'force' in cmdKeys else warmingTime
 
         for name in sourcesOn:
             if name not in self.lampNames:
