@@ -7,7 +7,7 @@ from threading import Thread
 
 
 class SourcesSim(socket.socket):
-    lampNames = ('halogen', 'argon', 'hgar', 'neon', 'krypton')
+    lampNames = ('halogen', 'neon', 'hgar', 'argon', 'krypton')
 
     def __init__(self):
         """Fake sources tcp server."""
