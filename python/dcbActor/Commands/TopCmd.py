@@ -5,12 +5,14 @@ import dcbActor.utils.makeLamDesign as lamConfig
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 from astropy import time as astroTime
+import dcbActor.utils.makeLamDesign as lamConfig
 
 
 class DcbConfig(object):
     validCollIds = tuple(range(1, 13))
     collNames = [f'coll{collId}' for collId in validCollIds]
     validMaskSize = '2.5', '2.8', '3.38', 'none'
+    validBundles = ['none'] + list(lamConfig.FIBER_COLORS.keys())
 
     def __init__(self, actor):
         self.actor = actor
@@ -32,6 +34,26 @@ class DcbConfig(object):
 
         self.actor.instData.persistKey('masks', *masks)
 
+    def getBundles(self):
+        try:
+            masks = self.actor.instData.loadKey('bundles')
+        except:
+            masks = ['none' for collId in DcbConfig.validCollIds]
+
+        return masks
+
+    def declareBundles(self, newBundles):
+        bundles = list(self.getBundles())
+
+        for i, newBundle in enumerate(newBundles):
+            if newBundle:
+                if newBundle!='none' and newBundle in bundles:
+                    j = bundles.index(newBundle)
+                    bundles[j] = 'none'
+                bundles[i] = newBundle
+
+        self.actor.instData.persistKey('bundles', *bundles)
+
 
 class TopCmd(object):
 
@@ -52,7 +74,7 @@ class TopCmd(object):
             ('monitor', '<controllers> <period>', self.monitor),
             ('config', '<fibers>', self.configFibers),
             ('declareMasks', f'[<install>] [<collIds>] {collArgs}', self.declareMasks),
-
+            ('declareBundles', f'[<install>] [<collIds>] {collArgs}', self.declareBundles),
         ]
 
         # Define typed command arguments for the above commands.
@@ -152,15 +174,19 @@ class TopCmd(object):
 
     def declareMasks(self, cmd):
         cmdKeys = cmd.cmd.keywords
+        maskSize = False
+        masks = [maskSize for collId in DcbConfig.validCollIds]
+
         if 'install' in cmdKeys:
             maskSize = str(cmdKeys['install'].values[0])
             if maskSize not in DcbConfig.validMaskSize:
                 raise ValueError(f'wrong mask value:{maskSize}, existing :{",".join(DcbConfig.validMaskSize)}')
-        else:
-            maskSize = False
 
         collIds = cmdKeys['collIds'].values if 'collIds' in cmdKeys else DcbConfig.validCollIds
-        masks = [maskSize for collId in collIds]
+        for collId in collIds:
+            if collId not in DcbConfig.validCollIds:
+                raise ValueError(f'wrong collId:{collId}, existing :{",".join(DcbConfig.validCollIds)}')
+            masks[collId - 1] = maskSize
 
         for i, collName in enumerate(DcbConfig.collNames):
             if collName in cmdKeys:
@@ -175,5 +201,35 @@ class TopCmd(object):
         cmd.inform(f'dcbMasks={",".join(self.dcbConfig.getMasks())}')
         cmd.finish()
 
-    def toto(self, cmd):
-        pass
+    def declareBundles(self, cmd):
+        cmdKeys = cmd.cmd.keywords
+        bundles = [False for collId in DcbConfig.validCollIds]
+
+        if 'install' in cmdKeys:
+            install = cmdKeys['install'].values
+            collIds = cmdKeys['collIds'].values if 'collIds' in cmdKeys else range(1, len(install) + 1)
+            if len(install) != len(collIds):
+                raise ValueError('len(install) has to match collIds')
+            for collId, bundle in zip(collIds, install):
+                if collId not in DcbConfig.validCollIds:
+                    raise ValueError(f'wrong collId:{collId}, existing :{",".join(DcbConfig.validCollIds)}')
+                if bundle not in DcbConfig.validBundles:
+                    raise ValueError(f'invalid bundle :{bundle}, existing :{",".join(DcbConfig.validBundles)}')
+                bundles[collId - 1] = str(bundle)
+
+        for i, collName in enumerate(DcbConfig.collNames):
+            if collName in cmdKeys:
+                bundle = str(cmdKeys[collName].values[0])
+                if bundle not in DcbConfig.validBundles:
+                    raise ValueError(f'invalid bundle :{bundle}, existing :{",".join(DcbConfig.validBundles)}')
+                bundles[i] = bundle
+
+        self.dcbConfig.declareBundles(bundles)
+        bundles = self.dcbConfig.getBundles()
+        colors = [bundle for bundle in bundles if bundle != 'none']
+        pfiDesignId = lamConfig.hashColors(colors)
+
+        cmd.inform(f'dcbConfigDate={astroTime.Time.now().mjd:0.6f}')
+        cmd.inform(f'dcbBundles={",".join(bundles)}')
+        cmd.inform('designId=0x%016x' % pfiDesignId)
+        cmd.finish()
