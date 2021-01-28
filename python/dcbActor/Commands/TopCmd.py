@@ -5,7 +5,6 @@ import dcbActor.utils.makeLamDesign as lamConfig
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 from astropy import time as astroTime
-import dcbActor.utils.makeLamDesign as lamConfig
 
 
 class DcbConfig(object):
@@ -47,7 +46,7 @@ class DcbConfig(object):
 
         for i, newBundle in enumerate(newBundles):
             if newBundle:
-                if newBundle!='none' and newBundle in bundles:
+                if newBundle != 'none' and newBundle in bundles:
                     j = bundles.index(newBundle)
                     bundles[j] = 'none'
                 bundles[i] = newBundle
@@ -72,7 +71,7 @@ class TopCmd(object):
             ('ping', '', self.ping),
             ('status', '[@all] [<controllers>]', self.status),
             ('monitor', '<controllers> <period>', self.monitor),
-            ('config', '<fibers>', self.configFibers),
+            ('config', '<fibers>', self.declareBundles),
             ('declareMasks', f'[<install>] [<collIds>] {collArgs}', self.declareMasks),
             ('declareBundles', f'[<install>] [<collIds>] {collArgs}', self.declareBundles),
         ]
@@ -148,7 +147,6 @@ class TopCmd(object):
                                                    self.actor.config.sections()))
 
         self.actor.updateStates(cmd=cmd)
-        self.actor.pfsDesignId(cmd=cmd)
 
         if 'all' in cmdKeys:
             for controller in self.actor.controllers:
@@ -157,20 +155,8 @@ class TopCmd(object):
             for controller in cmdKeys['controllers'].values:
                 self.actor.callCommand("%s status" % controller)
 
+        self.genDcbConfigKeys(cmd)
         cmd.finish(self.controllerKey())
-
-    def configFibers(self, cmd):
-        cmdKeys = cmd.cmd.keywords
-        fibers = [fib.strip() for fib in cmdKeys['fibers'].values]
-
-        for fiber in fibers:
-            if fiber not in lamConfig.FIBER_COLORS:
-                raise KeyError(f'{fiber} not in {",".join(lamConfig.FIBER_COLORS)}')
-
-        self.actor.instData.persistKey('fiberConfig', *fibers)
-        self.actor.pfsDesignId(cmd=cmd)
-
-        cmd.finish()
 
     def declareMasks(self, cmd):
         cmdKeys = cmd.cmd.keywords
@@ -196,17 +182,24 @@ class TopCmd(object):
                 masks[i] = maskSize
 
         self.dcbConfig.declareMask(masks)
-
         cmd.inform(f'dcbConfigDate={astroTime.Time.now().mjd:0.6f}')
-        cmd.inform(f'dcbMasks={",".join(self.dcbConfig.getMasks())}')
+
+        self.genDcbConfigKeys(cmd)
         cmd.finish()
 
     def declareBundles(self, cmd):
         cmdKeys = cmd.cmd.keywords
         bundles = [False for collId in DcbConfig.validCollIds]
 
-        if 'install' in cmdKeys:
+        if 'fibers' in cmdKeys:
+            bundles = ['none' for collId in DcbConfig.validCollIds]
+            install = cmdKeys['fibers'].values
+        elif 'install' in cmdKeys:
             install = cmdKeys['install'].values
+        else:
+            install = False
+
+        if install:
             collIds = cmdKeys['collIds'].values if 'collIds' in cmdKeys else range(1, len(install) + 1)
             if len(install) != len(collIds):
                 raise ValueError('len(install) has to match collIds')
@@ -225,11 +218,17 @@ class TopCmd(object):
                 bundles[i] = bundle
 
         self.dcbConfig.declareBundles(bundles)
+        cmd.inform(f'dcbConfigDate={astroTime.Time.now().mjd:0.6f}')
+
+        self.genDcbConfigKeys(cmd)
+        cmd.finish()
+
+    def genDcbConfigKeys(self, cmd):
         bundles = self.dcbConfig.getBundles()
         colors = [bundle for bundle in bundles if bundle != 'none']
         pfiDesignId = lamConfig.hashColors(colors)
 
-        cmd.inform(f'dcbConfigDate={astroTime.Time.now().mjd:0.6f}')
         cmd.inform(f'dcbBundles={",".join(bundles)}')
+        cmd.inform(f'dcbMasks={",".join(self.dcbConfig.getMasks())}')
         cmd.inform('designId=0x%016x' % pfiDesignId)
-        cmd.finish()
+        cmd.inform('fiberConfig="%s"' % ';'.join(colors))
