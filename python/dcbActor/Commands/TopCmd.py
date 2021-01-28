@@ -4,23 +4,55 @@
 import dcbActor.utils.makeLamDesign as lamConfig
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
+from astropy import time as astroTime
+
+
+class DcbConfig(object):
+    validCollIds = tuple(range(1, 13))
+    collNames = [f'coll{collId}' for collId in validCollIds]
+    validMaskSize = '2.5', '2.8', '3.38', 'none'
+
+    def __init__(self, actor):
+        self.actor = actor
+
+    def getMasks(self):
+        try:
+            masks = self.actor.instData.loadKey('masks')
+        except:
+            masks = ['none' for collId in DcbConfig.validCollIds]
+
+        return masks
+
+    def declareMask(self, newMasks):
+        masks = list(self.getMasks())
+
+        for i, mask in enumerate(newMasks):
+            if mask:
+                masks[i] = mask
+
+        self.actor.instData.persistKey('masks', *masks)
 
 
 class TopCmd(object):
+
     def __init__(self, actor):
         # This lets us access the rest of the actor.
         self.actor = actor
-
+        self.dcbConfig = DcbConfig(actor)
         # Declare the commands we implement. When the actor is started
         # these are registered with the parser, which will call the
         # associated methods when matched. The callbacks will be
         # passed a single argument, the parsed and typed command.
         #
+        collArgs = ' '.join([f'[<{collName}>]' for collName in DcbConfig.collNames])
+
         self.vocab = [
             ('ping', '', self.ping),
             ('status', '[@all] [<controllers>]', self.status),
             ('monitor', '<controllers> <period>', self.monitor),
-            ('config', '<fibers>', self.configFibers)
+            ('config', '<fibers>', self.configFibers),
+            ('declareMasks', f'[<install>] [<collIds>] {collArgs}', self.declareMasks),
+
         ]
 
         # Define typed command arguments for the above commands.
@@ -29,12 +61,23 @@ class TopCmd(object):
                                                  help='an optional name to assign to a controller instance'),
                                         keys.Key("controllers", types.String() * (1, None),
                                                  help='the names of 1 or more controllers to load'),
-                                        keys.Key("controller", types.String(),
-                                                 help='the names a controller.'),
-                                        keys.Key("period", types.Int(),
-                                                 help='the period to sample at.'),
-                                        keys.Key("fibers", types.String() * (1, None),
-                                                 help='the names of current fiber bundles'),
+                                        keys.Key("controller", types.String(), help='the names a controller.'),
+                                        keys.Key("period", types.Int(), help='the period to sample at.'),
+                                        keys.Key("fibers", types.String() * (1, None), help='current fiber bundles'),
+                                        keys.Key("install", types.String() * (1, None), help=''),
+                                        keys.Key("collIds", types.Int() * (1, None), help='collimator ids'),
+                                        keys.Key("coll1", types.String(), help='collimator 1 config'),
+                                        keys.Key("coll2", types.String(), help='collimator 2 config'),
+                                        keys.Key("coll3", types.String(), help='collimator 3 config'),
+                                        keys.Key("coll4", types.String(), help='collimator 4 config'),
+                                        keys.Key("coll5", types.String(), help='collimator 5 config'),
+                                        keys.Key("coll6", types.String(), help='collimator 6 config'),
+                                        keys.Key("coll7", types.String(), help='collimator 7 config'),
+                                        keys.Key("coll8", types.String(), help='collimator 8 config'),
+                                        keys.Key("coll9", types.String(), help='collimator 9 config'),
+                                        keys.Key("coll10", types.String(), help='collimator 10 config'),
+                                        keys.Key("coll11", types.String(), help='collimator 11 config'),
+                                        keys.Key("coll12", types.String(), help='collimator 12 config'),
                                         )
 
     def monitor(self, cmd):
@@ -106,3 +149,31 @@ class TopCmd(object):
         self.actor.pfsDesignId(cmd=cmd)
 
         cmd.finish()
+
+    def declareMasks(self, cmd):
+        cmdKeys = cmd.cmd.keywords
+        if 'install' in cmdKeys:
+            maskSize = str(cmdKeys['install'].values[0])
+            if maskSize not in DcbConfig.validMaskSize:
+                raise ValueError(f'wrong mask value:{maskSize}, existing :{",".join(DcbConfig.validMaskSize)}')
+        else:
+            maskSize = False
+
+        collIds = cmdKeys['collIds'].values if 'collIds' in cmdKeys else DcbConfig.validCollIds
+        masks = [maskSize for collId in collIds]
+
+        for i, collName in enumerate(DcbConfig.collNames):
+            if collName in cmdKeys:
+                maskSize = str(cmdKeys[collName].values[0])
+                if maskSize not in DcbConfig.validMaskSize:
+                    raise ValueError(f'wrong mask value:{maskSize}, existing :{",".join(DcbConfig.validMaskSize)}')
+                masks[i] = maskSize
+
+        self.dcbConfig.declareMask(masks)
+
+        cmd.inform(f'dcbConfigDate={astroTime.Time.now().mjd:0.6f}')
+        cmd.inform(f'dcbMasks={",".join(self.dcbConfig.getMasks())}')
+        cmd.finish()
+
+    def toto(self, cmd):
+        pass
