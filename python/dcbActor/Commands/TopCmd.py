@@ -5,60 +5,7 @@ import dcbActor.utils.makeLamDesign as lamConfig
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 from astropy import time as astroTime
-
-
-class DcbConfig(object):
-    validCollIds = tuple(range(1, 13))
-    collNames = [f'coll{collId}' for collId in validCollIds]
-
-    fNumbers = ['2.5', '2.8', '3.38']
-    validFNumbers = dict([(fNumber, f'f{fNumber}') for fNumber in fNumbers] +
-                         [(f'f{fNumber}', f'f{fNumber}') for fNumber in fNumbers] +
-                         [('none', 'none')])
-
-    validFNumberKeys = set(validFNumbers.values())
-
-    validBundles = ['none'] + list(lamConfig.FIBER_COLORS.keys())
-
-    def __init__(self, actor):
-        self.actor = actor
-
-    def getMasks(self):
-        try:
-            masks = self.actor.instData.loadKey('dcbMasks')
-        except:
-            masks = ['none' for collId in DcbConfig.validCollIds]
-
-        return masks
-
-    def declareMask(self, newMasks):
-        masks = list(self.getMasks())
-
-        for i, mask in enumerate(newMasks):
-            if mask:
-                masks[i] = mask
-
-        self.actor.instData.persistKey('dcbMasks', *masks)
-
-    def getBundles(self):
-        try:
-            masks = self.actor.instData.loadKey('dcbBundles')
-        except:
-            masks = ['none' for collId in DcbConfig.validCollIds]
-
-        return masks
-
-    def declareBundles(self, newBundles):
-        bundles = list(self.getBundles())
-
-        for i, newBundle in enumerate(newBundles):
-            if newBundle:
-                if newBundle != 'none' and newBundle in bundles:
-                    j = bundles.index(newBundle)
-                    bundles[j] = 'none'
-                bundles[i] = newBundle
-
-        self.actor.instData.persistKey('dcbBundles', *bundles)
+from dcbActor.utils.dcbConfig import DcbConfig
 
 
 class TopCmd(object):
