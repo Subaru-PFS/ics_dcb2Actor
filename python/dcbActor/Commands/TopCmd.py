@@ -10,7 +10,14 @@ from astropy import time as astroTime
 class DcbConfig(object):
     validCollIds = tuple(range(1, 13))
     collNames = [f'coll{collId}' for collId in validCollIds]
-    validMaskSize = '2.5', '2.8', '3.38', 'none'
+
+    fNumbers = ['2.5', '2.8', '3.38']
+    validFNumbers = dict([(fNumber, f'f{fNumber}') for fNumber in fNumbers] +
+                         [(f'f{fNumber}', f'f{fNumber}') for fNumber in fNumbers] +
+                         [('none', 'none')])
+
+    validFNumberKeys = set(validFNumbers.values())
+
     validBundles = ['none'] + list(lamConfig.FIBER_COLORS.keys())
 
     def __init__(self, actor):
@@ -18,7 +25,7 @@ class DcbConfig(object):
 
     def getMasks(self):
         try:
-            masks = self.actor.instData.loadKey('masks')
+            masks = self.actor.instData.loadKey('dcbMasks')
         except:
             masks = ['none' for collId in DcbConfig.validCollIds]
 
@@ -31,11 +38,11 @@ class DcbConfig(object):
             if mask:
                 masks[i] = mask
 
-        self.actor.instData.persistKey('masks', *masks)
+        self.actor.instData.persistKey('dcbMasks', *masks)
 
     def getBundles(self):
         try:
-            masks = self.actor.instData.loadKey('bundles')
+            masks = self.actor.instData.loadKey('dcbBundles')
         except:
             masks = ['none' for collId in DcbConfig.validCollIds]
 
@@ -51,7 +58,7 @@ class DcbConfig(object):
                     bundles[j] = 'none'
                 bundles[i] = newBundle
 
-        self.actor.instData.persistKey('bundles', *bundles)
+        self.actor.instData.persistKey('dcbBundles', *bundles)
 
 
 class TopCmd(object):
@@ -160,26 +167,32 @@ class TopCmd(object):
 
     def declareMasks(self, cmd):
         cmdKeys = cmd.cmd.keywords
-        maskSize = False
-        masks = [maskSize for collId in DcbConfig.validCollIds]
+        fNumber = False
+        masks = [fNumber for collId in DcbConfig.validCollIds]
 
         if 'install' in cmdKeys:
-            maskSize = str(cmdKeys['install'].values[0])
-            if maskSize not in DcbConfig.validMaskSize:
-                raise ValueError(f'wrong mask value:{maskSize}, existing :{",".join(DcbConfig.validMaskSize)}')
+            key = str(cmdKeys['install'].values[0])
+            try:
+                fNumber = DcbConfig.validFNumbers[key]
+            except KeyError:
+                raise ValueError(f'wrong f-number:{key}, valid:{",".join(DcbConfig.validFNumberKeys)}')
 
         collIds = cmdKeys['collIds'].values if 'collIds' in cmdKeys else DcbConfig.validCollIds
         for collId in collIds:
             if collId not in DcbConfig.validCollIds:
-                raise ValueError(f'wrong collId:{collId}, existing :{",".join(DcbConfig.validCollIds)}')
-            masks[collId - 1] = maskSize
+                print(collId)
+                print(DcbConfig.validCollIds)
+                raise ValueError(f'wrong collId:{collId}, valid:{",".join(map(str, DcbConfig.validCollIds))}')
+            masks[collId - 1] = fNumber
 
         for i, collName in enumerate(DcbConfig.collNames):
             if collName in cmdKeys:
-                maskSize = str(cmdKeys[collName].values[0])
-                if maskSize not in DcbConfig.validMaskSize:
-                    raise ValueError(f'wrong mask value:{maskSize}, existing :{",".join(DcbConfig.validMaskSize)}')
-                masks[i] = maskSize
+                key = str(cmdKeys[collName].values[0])
+                try:
+                    fNumber = DcbConfig.validFNumbers[key]
+                except KeyError:
+                    raise ValueError(f'wrong f-number:{key}, valid:{",".join(DcbConfig.validFNumberKeys)}')
+                masks[i] = fNumber
 
         self.dcbConfig.declareMask(masks)
         cmd.inform(f'dcbConfigDate={astroTime.Time.now().mjd:0.6f}')
@@ -205,16 +218,16 @@ class TopCmd(object):
                 raise ValueError('len(install) has to match collIds')
             for collId, bundle in zip(collIds, install):
                 if collId not in DcbConfig.validCollIds:
-                    raise ValueError(f'wrong collId:{collId}, existing :{",".join(DcbConfig.validCollIds)}')
+                    raise ValueError(f'wrong collId:{collId}, valid:{",".join(map(str, DcbConfig.validCollIds))}')
                 if bundle not in DcbConfig.validBundles:
-                    raise ValueError(f'invalid bundle :{bundle}, existing :{",".join(DcbConfig.validBundles)}')
+                    raise ValueError(f'invalid bundle :{bundle}, valid:{",".join(DcbConfig.validBundles)}')
                 bundles[collId - 1] = str(bundle)
 
         for i, collName in enumerate(DcbConfig.collNames):
             if collName in cmdKeys:
                 bundle = str(cmdKeys[collName].values[0])
                 if bundle not in DcbConfig.validBundles:
-                    raise ValueError(f'invalid bundle :{bundle}, existing :{",".join(DcbConfig.validBundles)}')
+                    raise ValueError(f'invalid bundle :{bundle}, valid:{",".join(DcbConfig.validBundles)}')
                 bundles[i] = bundle
 
         self.dcbConfig.declareBundles(bundles)
