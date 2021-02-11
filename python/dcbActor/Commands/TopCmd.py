@@ -159,7 +159,7 @@ class TopCmd(object):
 
         if install:
             if 'into' in cmdKeys:
-                setName = cmdKeys['into'].values
+                setName = cmdKeys['into'].values[0]
             else:
                 try:
                     [setName] = self.dcbConfig.setNames

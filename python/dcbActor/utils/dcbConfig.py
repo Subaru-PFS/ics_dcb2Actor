@@ -188,31 +188,17 @@ class DcbConfig(object):
 
     def __init__(self, actor):
         self.actor = actor
-        self.collSets = self.fetchIlluminationSetup()
-
-    @property
-    def genMasks(self):
-        """Generate masks keywords, fill with none to get 12 fields if necessary."""
-        masks = sum([list(collSet.fNumbers) for collSet in self.collSets.values()], [])
-        masks.extend((12 - len(masks)) * ['none'])
-        return ','.join(map(str, masks))
-
-    @property
-    def genBundles(self):
-        """Generate bundles keywords, fill with none to get 12 fields if necessary."""
-        bundles = sum([list(collSet.bundles) for collSet in self.collSets.values()], [])
-        bundles.extend((12 - len(bundles)) * ['none'])
-        return ','.join(map(str, bundles))
-
-    @property
-    def genConfigDate(self):
-        """Get last config date."""
-        return max([collSet.configDate for collSet in self.collSets.values()])
+        self.collSetDict = self.fetchIlluminationSetup()
 
     @property
     def setNames(self):
         """Collimator set names."""
-        return self.collSets.keys()
+        return self.collSetDict.keys()
+
+    @property
+    def collSets(self):
+        """Collimator sets."""
+        return self.collSetDict.values()
 
     def fetchIlluminationSetup(self):
         """Load illumination setup(1-2)."""
@@ -221,8 +207,8 @@ class DcbConfig(object):
 
     def fetchCollSets(self, setup):
         """Instantiate Collimator Sets from loaded dcb setup."""
-        sets = [setName.strip() for setName in self.actor.config.get(setup, 'collSets').split(',')]
-        return dict([(setName, CollSet(self.actor, setName)) for setName in sets])
+        setNames = [setName.strip() for setName in self.actor.config.get(setup, 'collSets').split(',')]
+        return dict([(setName, CollSet(self.actor, setName)) for setName in setNames])
 
     def declareMasks(self, cmd, colls=None, **fNumbers):
         """Persist new dcbMasks for multiple collimator sets.
@@ -240,7 +226,7 @@ class DcbConfig(object):
             if setName not in self.setNames:
                 raise RuntimeError(f'{setName} is not into {self.actor.name} setup, valids:{",".join(self.setNames)}')
 
-            self.collSets[setName].declareMasks(cmd, fNumber, colls=colls)
+            self.collSetDict[setName].declareMasks(cmd, fNumber, colls=colls)
 
     def ensureBundleIsUnic(self, cmd, bundleSets):
         """dcb cables has only one bundle each, make sure that's the case.
@@ -252,7 +238,7 @@ class DcbConfig(object):
         bundleSets : dict
             bundle list per collimator set.
         """
-        for collSet in self.collSets.values():
+        for collSet in self.collSets:
             for setName, bundleSet in bundleSets.items():
                 for bundle in bundleSet:
                     try:
@@ -279,7 +265,7 @@ class DcbConfig(object):
             if setName not in self.setNames:
                 raise RuntimeError(f'{setName} is not into {self.actor.name} setup, valids:{",".join(self.setNames)}')
 
-            self.collSets[setName].declareBundles(cmd, bundleSet, colls=colls)
+            self.collSetDict[setName].declareBundles(cmd, bundleSet, colls=colls)
 
     def dcbSetup(self):
         """Generate pandas dataframe describing dcb illumination setup
@@ -289,7 +275,7 @@ class DcbConfig(object):
         df :
             pd.DataFrame
         """
-        return pd.concat([collSet.dataFrame() for collSet in self.collSets.values()]).reset_index(drop=True)
+        return pd.concat([collSet.dataFrame() for collSet in self.collSets]).reset_index(drop=True)
 
     def genKeys(self, cmd):
         """Generate dcb config keywords.
@@ -299,7 +285,7 @@ class DcbConfig(object):
         cmd :
             mhs command.
         """
-        for collSet in self.collSets.values():
+        for collSet in self.collSets:
             collSet.genKeys(cmd)
 
         dcbSetup = self.dcbSetup()
