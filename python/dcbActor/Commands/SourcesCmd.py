@@ -75,7 +75,7 @@ class SourcesCmd(object):
 
     @singleShot
     def warmup(self, cmd):
-        """Switch on light sources and warm it up if requested"""
+        """Switch on light sources and warm it up if requested, FSM protect from go command."""
         cmdKeys = cmd.cmd.keywords
         sourcesOn = cmdKeys['on'].values if 'on' in cmdKeys else []
         warmingTime = cmdKeys['warmingTime'].values[0] if 'warmingTime' in cmdKeys else None
@@ -100,11 +100,6 @@ class SourcesCmd(object):
 
         self.controller.switchOff(cmd, sourcesOff)
         self.controller.generate(cmd)
-
-    def abort(self, cmd):
-        """Abort iis warmup."""
-        self.controller.doAbort()
-        cmd.finish("text='warmup aborted'")
 
     @blocking
     def prepare(self, cmd):
@@ -155,6 +150,11 @@ class SourcesCmd(object):
         self.controller.substates.triggering(cmd)
 
         cmd.finish()
+
+    def abort(self, cmd):
+        """Abort iis warmup."""
+        self.controller.doAbort()
+        cmd.finish("text='warmup aborted'")
 
     @singleShot
     def stop(self, cmd):
