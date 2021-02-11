@@ -4,8 +4,7 @@
 import dcbActor.utils.makeLamDesign as lamConfig
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
-from astropy import time as astroTime
-from dcbActor.utils.dcbConfig import DcbConfig
+from dcbActor.utils.dcbConfig import DcbConfig, CollSet
 
 
 class TopCmd(object):
@@ -19,15 +18,17 @@ class TopCmd(object):
         # associated methods when matched. The callbacks will be
         # passed a single argument, the parsed and typed command.
         #
-        collArgs = ' '.join([f'[<{collName}>]' for collName in DcbConfig.collNames])
+        collSets = ' '.join([f'[<{setName}>]' for setName in CollSet.knownSets])
 
         self.vocab = [
             ('ping', '', self.ping),
             ('status', '[@all] [<controllers>]', self.status),
             ('monitor', '<controllers> <period>', self.monitor),
             ('config', '<fibers>', self.declareBundles),
-            ('declareMasks', f'[<install>] [<collIds>] {collArgs}', self.declareMasks),
-            ('declareBundles', f'[<install>] [<collIds>] {collArgs}', self.declareBundles),
+            ('declareMasks', f'{collSets} [<colls>]', self.declareMasks),
+            ('declareMasks', f'<install> [<into>] [<colls>]', self.declareMasks),
+            ('declareBundles', f'{collSets} [<colls>]', self.declareBundles),
+            ('declareBundles', f'<install> [<into>] [<colls>]', self.declareBundles),
         ]
 
         # Define typed command arguments for the above commands.
@@ -40,19 +41,13 @@ class TopCmd(object):
                                         keys.Key("period", types.Int(), help='the period to sample at.'),
                                         keys.Key("fibers", types.String() * (1, None), help='current fiber bundles'),
                                         keys.Key("install", types.String() * (1, None), help=''),
-                                        keys.Key("collIds", types.Int() * (1, None), help='collimator ids'),
-                                        keys.Key("coll1", types.String(), help='collimator 1 config'),
-                                        keys.Key("coll2", types.String(), help='collimator 2 config'),
-                                        keys.Key("coll3", types.String(), help='collimator 3 config'),
-                                        keys.Key("coll4", types.String(), help='collimator 4 config'),
-                                        keys.Key("coll5", types.String(), help='collimator 5 config'),
-                                        keys.Key("coll6", types.String(), help='collimator 6 config'),
-                                        keys.Key("coll7", types.String(), help='collimator 7 config'),
-                                        keys.Key("coll8", types.String(), help='collimator 8 config'),
-                                        keys.Key("coll9", types.String(), help='collimator 9 config'),
-                                        keys.Key("coll10", types.String(), help='collimator 10 config'),
-                                        keys.Key("coll11", types.String(), help='collimator 11 config'),
-                                        keys.Key("coll12", types.String(), help='collimator 12 config'),
+                                        keys.Key("into", types.String() * (1, None), help='collimator set'),
+                                        keys.Key("colls", types.Int() * (1, None), help='collimator identifiers'),
+                                        keys.Key("set1", types.String() * (1, None), help='collimator set 1 config'),
+                                        keys.Key("set2", types.String() * (1, None), help='collimator set 2 config'),
+                                        keys.Key("set3", types.String() * (1, None), help='collimator set 3 config'),
+                                        keys.Key("set4", types.String() * (1, None), help='collimator set 4 config'),
+                                        keys.Key("oneColl", types.String() * (1, None), help='one collimator'),
                                         )
 
     def monitor(self, cmd):
@@ -109,50 +104,53 @@ class TopCmd(object):
             for controller in cmdKeys['controllers'].values:
                 self.actor.callCommand("%s status" % controller)
 
-        self.genDcbConfigKeys(cmd)
+        self.dcbConfig.genKeys(cmd)
         cmd.finish(self.controllerKey())
 
     def declareMasks(self, cmd):
+        def retrieveFNumber(key):
+            val = str(cmdKeys[key].values[0])
+            try:
+                fNumber = DcbConfig.validFNumbers[val]
+            except KeyError:
+                raise ValueError(f'wrong f-number:{val}, valid:{",".join(DcbConfig.validFNumberKeys)}')
+            return fNumber
+
         cmdKeys = cmd.cmd.keywords
-        fNumber = False
-        masks = [fNumber for collId in DcbConfig.validCollIds]
+        fNumbers = dict()
+        fNumbers['colls'] = cmdKeys['colls'].values if 'colls' in cmdKeys else None
 
         if 'install' in cmdKeys:
-            key = str(cmdKeys['install'].values[0])
-            try:
-                fNumber = DcbConfig.validFNumbers[key]
-            except KeyError:
-                raise ValueError(f'wrong f-number:{key}, valid:{",".join(DcbConfig.validFNumberKeys)}')
+            fNumber = retrieveFNumber('install')
+            setNames = cmdKeys['into'].values if 'into' in cmdKeys else self.dcbConfig.setNames
+            for setName in setNames:
+                fNumbers[setName] = fNumber
 
-        collIds = cmdKeys['collIds'].values if 'collIds' in cmdKeys else DcbConfig.validCollIds
-        for collId in collIds:
-            if collId not in DcbConfig.validCollIds:
-                print(collId)
-                print(DcbConfig.validCollIds)
-                raise ValueError(f'wrong collId:{collId}, valid:{",".join(map(str, DcbConfig.validCollIds))}')
-            masks[collId - 1] = fNumber
+        for i, setName in enumerate(CollSet.knownSets):
+            if setName in cmdKeys:
+                fNumbers[setName] = retrieveFNumber(setName)
 
-        for i, collName in enumerate(DcbConfig.collNames):
-            if collName in cmdKeys:
-                key = str(cmdKeys[collName].values[0])
-                try:
-                    fNumber = DcbConfig.validFNumbers[key]
-                except KeyError:
-                    raise ValueError(f'wrong f-number:{key}, valid:{",".join(DcbConfig.validFNumberKeys)}')
-                masks[i] = fNumber
+        self.dcbConfig.declareMasks(cmd, **fNumbers)
+        self.dcbConfig.genKeys(cmd)
 
-        self.dcbConfig.declareMask(masks)
-        cmd.inform(f'dcbConfigDate={astroTime.Time.now().mjd:0.6f}')
-
-        self.genDcbConfigKeys(cmd)
         cmd.finish()
 
     def declareBundles(self, cmd):
+        def validateBundleSet(bundleSet):
+            for bundle in bundleSet:
+                if bundle not in DcbConfig.validBundles:
+                    raise ValueError(f'invalid bundle :{bundle}, valid:{",".join(DcbConfig.validBundles)}')
+            return [str(bundle) for bundle in bundleSet]
+
         cmdKeys = cmd.cmd.keywords
-        bundles = [False for collId in DcbConfig.validCollIds]
+        bundleSets = dict()
+        bundleSets['colls'] = cmdKeys['colls'].values if 'colls' in cmdKeys else None
+
+        for i, setName in enumerate(CollSet.knownSets):
+            if setName in cmdKeys:
+                bundleSets[setName] = validateBundleSet(cmdKeys[setName].values)
 
         if 'fibers' in cmdKeys:
-            bundles = ['none' for collId in DcbConfig.validCollIds]
             install = cmdKeys['fibers'].values
         elif 'install' in cmdKeys:
             install = cmdKeys['install'].values
@@ -160,35 +158,18 @@ class TopCmd(object):
             install = False
 
         if install:
-            collIds = cmdKeys['collIds'].values if 'collIds' in cmdKeys else range(1, len(install) + 1)
-            if len(install) != len(collIds):
-                raise ValueError('len(install) has to match collIds')
-            for collId, bundle in zip(collIds, install):
-                if collId not in DcbConfig.validCollIds:
-                    raise ValueError(f'wrong collId:{collId}, valid:{",".join(map(str, DcbConfig.validCollIds))}')
-                if bundle not in DcbConfig.validBundles:
-                    raise ValueError(f'invalid bundle :{bundle}, valid:{",".join(DcbConfig.validBundles)}')
-                bundles[collId - 1] = str(bundle)
+            if 'into' in cmdKeys:
+                setName = cmdKeys['into'].values
+            else:
+                try:
+                    [setName] = self.dcbConfig.setNames
+                except:
+                    raise ValueError(f'ambiguous bundles definition... '
+                                     f'please precise one collimator set:{",".join(self.dcbConfig.setNames)}')
+            bundleSets[setName] = validateBundleSet(install)
 
-        for i, collName in enumerate(DcbConfig.collNames):
-            if collName in cmdKeys:
-                bundle = str(cmdKeys[collName].values[0])
-                if bundle not in DcbConfig.validBundles:
-                    raise ValueError(f'invalid bundle :{bundle}, valid:{",".join(DcbConfig.validBundles)}')
-                bundles[i] = bundle
+        self.dcbConfig.declareBundles(cmd, **bundleSets)
+        self.dcbConfig.genKeys(cmd)
 
-        self.dcbConfig.declareBundles(bundles)
-        cmd.inform(f'dcbConfigDate={astroTime.Time.now().mjd:0.6f}')
-
-        self.genDcbConfigKeys(cmd)
         cmd.finish()
 
-    def genDcbConfigKeys(self, cmd):
-        bundles = self.dcbConfig.getBundles()
-        colors = [bundle for bundle in bundles if bundle != 'none']
-        pfiDesignId = lamConfig.hashColors(colors)
-
-        cmd.inform(f'dcbBundles={",".join(bundles)}')
-        cmd.inform(f'dcbMasks={",".join(self.dcbConfig.getMasks())}')
-        cmd.inform('designId=0x%016x' % pfiDesignId)
-        cmd.inform('fiberConfig="%s"' % ';'.join(colors))
