@@ -4,23 +4,31 @@
 import dcbActor.utils.makeLamDesign as lamConfig
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
+from dcbActor.utils.dcbConfig import DcbConfig, CollSet
 
 
 class TopCmd(object):
+
     def __init__(self, actor):
         # This lets us access the rest of the actor.
         self.actor = actor
-
+        self.dcbConfig = DcbConfig(actor)
         # Declare the commands we implement. When the actor is started
         # these are registered with the parser, which will call the
         # associated methods when matched. The callbacks will be
         # passed a single argument, the parsed and typed command.
         #
+        collSets = ' '.join([f'[<{setName}>]' for setName in CollSet.knownSets])
+
         self.vocab = [
             ('ping', '', self.ping),
             ('status', '[@all] [<controllers>]', self.status),
             ('monitor', '<controllers> <period>', self.monitor),
-            ('config', '<fibers>', self.configFibers)
+            ('config', '<fibers>', self.declareBundles),
+            ('declareMasks', f'{collSets} [<colls>]', self.declareMasks),
+            ('declareMasks', f'<install> [<into>] [<colls>]', self.declareMasks),
+            ('declareBundles', f'{collSets} [<colls>]', self.declareBundles),
+            ('declareBundles', f'<install> [<into>] [<colls>]', self.declareBundles),
         ]
 
         # Define typed command arguments for the above commands.
@@ -29,12 +37,17 @@ class TopCmd(object):
                                                  help='an optional name to assign to a controller instance'),
                                         keys.Key("controllers", types.String() * (1, None),
                                                  help='the names of 1 or more controllers to load'),
-                                        keys.Key("controller", types.String(),
-                                                 help='the names a controller.'),
-                                        keys.Key("period", types.Int(),
-                                                 help='the period to sample at.'),
-                                        keys.Key("fibers", types.String() * (1, None),
-                                                 help='the names of current fiber bundles'),
+                                        keys.Key("controller", types.String(), help='the names a controller.'),
+                                        keys.Key("period", types.Int(), help='the period to sample at.'),
+                                        keys.Key("fibers", types.String() * (1, None), help='current fiber bundles'),
+                                        keys.Key("install", types.String() * (1, None), help=''),
+                                        keys.Key("into", types.String() * (1, None), help='collimator set'),
+                                        keys.Key("colls", types.Int() * (1, None), help='collimator identifiers'),
+                                        keys.Key("set1", types.String() * (1, None), help='collimator set 1 config'),
+                                        keys.Key("set2", types.String() * (1, None), help='collimator set 2 config'),
+                                        keys.Key("set3", types.String() * (1, None), help='collimator set 3 config'),
+                                        keys.Key("set4", types.String() * (1, None), help='collimator set 4 config'),
+                                        keys.Key("oneColl", types.String() * (1, None), help='one collimator'),
                                         )
 
     def monitor(self, cmd):
@@ -83,7 +96,6 @@ class TopCmd(object):
                                                    self.actor.config.sections()))
 
         self.actor.updateStates(cmd=cmd)
-        self.actor.pfsDesignId(cmd=cmd)
 
         if 'all' in cmdKeys:
             for controller in self.actor.controllers:
@@ -92,17 +104,72 @@ class TopCmd(object):
             for controller in cmdKeys['controllers'].values:
                 self.actor.callCommand("%s status" % controller)
 
+        self.dcbConfig.genKeys(cmd)
         cmd.finish(self.controllerKey())
 
-    def configFibers(self, cmd):
+    def declareMasks(self, cmd):
+        def retrieveFNumber(key):
+            val = str(cmdKeys[key].values[0])
+            try:
+                fNumber = DcbConfig.validFNumbers[val]
+            except KeyError:
+                raise ValueError(f'wrong f-number:{val}, valid:{",".join(DcbConfig.validFNumberKeys)}')
+            return fNumber
+
         cmdKeys = cmd.cmd.keywords
-        fibers = [fib.strip() for fib in cmdKeys['fibers'].values]
+        fNumbers = dict()
+        fNumbers['colls'] = cmdKeys['colls'].values if 'colls' in cmdKeys else None
 
-        for fiber in fibers:
-            if fiber not in lamConfig.FIBER_COLORS:
-                raise KeyError(f'{fiber} not in {",".join(lamConfig.FIBER_COLORS)}')
+        if 'install' in cmdKeys:
+            fNumber = retrieveFNumber('install')
+            setNames = cmdKeys['into'].values if 'into' in cmdKeys else self.dcbConfig.setNames
+            for setName in setNames:
+                fNumbers[setName] = fNumber
 
-        self.actor.instData.persistKey('fiberConfig', *fibers)
-        self.actor.pfsDesignId(cmd=cmd)
+        for i, setName in enumerate(CollSet.knownSets):
+            if setName in cmdKeys:
+                fNumbers[setName] = retrieveFNumber(setName)
+
+        self.dcbConfig.declareMasks(cmd, **fNumbers)
+        self.dcbConfig.genKeys(cmd)
 
         cmd.finish()
+
+    def declareBundles(self, cmd):
+        def validateBundleSet(bundleSet):
+            for bundle in bundleSet:
+                if bundle not in DcbConfig.validBundles:
+                    raise ValueError(f'invalid bundle :{bundle}, valid:{",".join(DcbConfig.validBundles)}')
+            return [str(bundle) for bundle in bundleSet]
+
+        cmdKeys = cmd.cmd.keywords
+        bundleSets = dict()
+        bundleSets['colls'] = cmdKeys['colls'].values if 'colls' in cmdKeys else None
+
+        for i, setName in enumerate(CollSet.knownSets):
+            if setName in cmdKeys:
+                bundleSets[setName] = validateBundleSet(cmdKeys[setName].values)
+
+        if 'fibers' in cmdKeys:
+            install = cmdKeys['fibers'].values
+        elif 'install' in cmdKeys:
+            install = cmdKeys['install'].values
+        else:
+            install = False
+
+        if install:
+            if 'into' in cmdKeys:
+                setName = cmdKeys['into'].values
+            else:
+                try:
+                    [setName] = self.dcbConfig.setNames
+                except:
+                    raise ValueError(f'ambiguous bundles definition... '
+                                     f'please precise one collimator set:{",".join(self.dcbConfig.setNames)}')
+            bundleSets[setName] = validateBundleSet(install)
+
+        self.dcbConfig.declareBundles(cmd, **bundleSets)
+        self.dcbConfig.genKeys(cmd)
+
+        cmd.finish()
+

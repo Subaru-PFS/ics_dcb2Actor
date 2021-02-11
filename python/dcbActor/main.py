@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
-import configparser
 import logging
 
-import dcbActor.utils.makeLamDesign as lamConfig
 from enuActor.main import enuActor
 
 
@@ -23,15 +21,6 @@ class DcbActor(enuActor):
             self.allControllers = [s.strip() for s in self.config.get(self.name, 'startingControllers').split(',')]
             self.attachAllControllers()
             self.everConnected = True
-
-    def pfsDesignId(self, cmd):
-        try:
-            fibers = self.instData.loadKey('fiberConfig')
-            pfiDesignId = lamConfig.hashColors(fibers)
-            cmd.inform('fiberConfig="%s"' % ';'.join(fibers))
-            cmd.inform('designId=0x%016x' % pfiDesignId)
-        except:
-            cmd.warn('text="could not load fiberConfig from instdata')
 
 
 def main():
