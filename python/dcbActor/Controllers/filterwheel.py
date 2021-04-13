@@ -1,6 +1,7 @@
 __author__ = 'alefur'
 
 import logging
+import time
 
 import enuActor.utils.bufferedSocket as bufferedSocket
 from dcbActor.Simulators.filterwheel import FilterwheelSim
@@ -8,6 +9,7 @@ from enuActor.utils.fsmThread import FSMThread
 
 
 class filterwheel(FSMThread, bufferedSocket.EthComm):
+    wheelPort = dict(linewheel=0, qthwheel=1)
 
     def __init__(self, actor, name, loglevel=logging.DEBUG):
         """This sets up the connections to/from the hub, the logger, and the twisted reactor.
@@ -40,6 +42,16 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         else:
             raise ValueError('unknown mode')
 
+    @property
+    def lineHoles(self):
+        return dict(
+            [(i + 1, h.strip()) for i, h in enumerate(self.actor.config.get('filterwheel', 'lineHoles').split(','))])
+
+    @property
+    def qthHoles(self):
+        return dict(
+            [(i + 1, h.strip()) for i, h in enumerate(self.actor.config.get('filterwheel', 'qthHoles').split(','))])
+
     def _loadCfg(self, cmd, mode=None):
         """Load filterwheel configuration.
 
@@ -60,7 +72,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         :param cmd: current command.
         :raise: socket.error if the communication has failed.
         """
-        self.ioBuffer = bufferedSocket.BufferedSocket(self.name + 'IO', EOL='\n')
+        self.ioBuffer = bufferedSocket.BufferedSocket(self.name + 'IO', EOL='\n', timeout=3)
         s = self.connectSock()
 
     def _closeComm(self, cmd):
@@ -88,20 +100,24 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         adc2 = self.sendOneCommand('adc 2', cmd=cmd)
 
         try:
-            linewheel, = self.actor.instData.loadKey('linewheel')
+            lineWheel, = self.actor.instData.loadKey('linewheel')
+            lineHole = self.lineHoles[lineWheel]
         except:
-            #a bit of flexibility, to be removed later
-            linewheel = -1
+            # a bit of flexibility, to be removed later
+            lineWheel = -1
+            lineHole = 'unknown'
 
         try:
-            qthwheel, = self.actor.instData.loadKey('qthwheel')
+            qthWheel, = self.actor.instData.loadKey('qthwheel')
+            qthHole = self.qthHoles[qthWheel]
         except:
-            #a bit of flexibility, to be removed later
-            qthwheel = -1
+            # a bit of flexibility, to be removed later
+            qthWheel = -1
+            qthHole = 'unknown'
 
         cmd.inform(f'adc={adc1},{adc2}')
-        cmd.inform(f'linewheel={linewheel}')
-        cmd.inform(f'qthwheel={qthwheel}')
+        cmd.inform(f'linewheel={lineWheel},{lineHole}')
+        cmd.inform(f'qthwheel={qthWheel},{qthHole}')
 
     def moving(self, cmd, wheel, position):
         """Move required wheel to required position
@@ -113,9 +129,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         ret = self.sendOneCommand(f'{wheel} {position}', cmd=cmd)
         cmd.inform(f'text="{ret}"')
 
-        while 'Moved to position' not in ret:
-            ret = self.getOneResponse(cmd=cmd)
-            cmd.inform(f'text="{ret}"')
+        ret = self.waitForEndBlock(cmd, 'Moved to position', timeout=10, timeLim=30)
 
         __, position = ret.split('Moved to position')
         position = int(position)
@@ -132,9 +146,9 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         ret = self.sendOneCommand(f'{wheel} {-1}', cmd=cmd)
         cmd.inform(f'text="{ret}"')
 
-        while 'Done' not in ret:
-            ret = self.getOneResponse(cmd=cmd)
-            cmd.inform(f'text="{ret}"')
+        cmd.inform(f'text="waiting for filterwheel-dcb response within 20 seconds...')
+        self.waitForEndBlock(cmd,  f'Calibrating FW {filterwheel.wheelPort[wheel]}', timeout=30, timeLim=60)
+        self.waitForEndBlock(cmd, 'Done', timeout=5, timeLim=15)
 
         self.actor.instData.persistKey(wheel, 1)
 
@@ -149,9 +163,31 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         ret = self.sendOneCommand('continue ', cmd=cmd)
         cmd.inform(f'text="{ret}"')
 
-        while 'Zeros for channel' not in ret:
-            ret = self.getOneResponse(cmd=cmd)
-            cmd.inform(f'text="{ret}"')
+        self.waitForEndBlock(cmd, 'Zeros for channel', timeout=5, timeLim=15)
+
+    def waitForEndBlock(self, cmd, endBlock, timeout=10, timeLim=30, maxIter=100):
+        """Wait until end block is returned, various check are made to avoid endless loop.
+        :param cmd: current command.
+        :param endBlock: expected end block
+        :param timeout: buffer timeout.
+        :param timeLim: total timeout.
+        :raise: Exception with warning message.
+        """
+        ret = ''
+        start = time.time()
+        iter = 0
+
+        while endBlock not in ret:
+            ret = self.getOneResponse(cmd=cmd, timeout=timeout)
+            if ret:
+                cmd.inform(f'text="{ret}"')
+            if (time.time() - start) > timeLim:
+                raise TimeoutError('filterwheel-dcb has not answered in the appropriate timing...')
+            if iter > maxIter:
+                raise RuntimeError('socket is broken...')
+            iter += 1
+
+        return ret
 
     def createSock(self):
         """Create socket in operation, simulator otherwise.
