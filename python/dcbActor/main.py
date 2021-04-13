@@ -18,6 +18,13 @@ class DcbActor(enuActor):
         """Attach all controllers."""
         if self.everConnected is False:
             logging.info("Attaching all controllers...")
+            setup = self.config.get(self.name, 'illumination').strip()
+            sources = self.config.get(setup, 'pdu').strip()
+            try:
+                self.connect(sources, instanceName="sources")
+            except Exception as e:
+                self.logger.warn('text=%s' % self.strTraceback(e))
+
             self.allControllers = [s.strip() for s in self.config.get(self.name, 'startingControllers').split(',')]
             self.attachAllControllers()
             self.everConnected = True

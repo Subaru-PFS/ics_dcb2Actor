@@ -4,12 +4,12 @@ import logging
 import time
 
 import enuActor.utils.bufferedSocket as bufferedSocket
-from dcbActor.Simulators.sources import SourcesSim
+from dcbActor.Simulators.digitalLoggers import SourcesSim
 from dcbActor.utils.lampState import LampState
 from enuActor.utils.fsmThread import FSMThread
 
 
-class sources(FSMThread, bufferedSocket.EthComm):
+class digitalLoggers(FSMThread, bufferedSocket.EthComm):
     warmingTimes = dict(hgar=15, neon=15, xenon=15, krypton=15, argon=15, qth=60, halogen=60)
 
     def __init__(self, actor, name, loglevel=logging.DEBUG):
