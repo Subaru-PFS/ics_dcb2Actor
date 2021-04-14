@@ -23,7 +23,7 @@ class DcbActor(enuActor):
             try:
                 self.connect(sources, instanceName="sources")
             except Exception as e:
-                self.logger.warn('text=%s' % self.strTraceback(e))
+                self.logger.warning('text=%s' % self.strTraceback(e))
 
             self.allControllers = [s.strip() for s in self.config.get(self.name, 'startingControllers').split(',')]
             self.attachAllControllers()

@@ -57,7 +57,7 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
         return list(self.outletConfig.values())
 
     @property
-    def sourcesOn(self):
+    def lampsOn(self):
         return [lamp for lamp in self.lampNames if self.lampStates[lamp].lampOn]
 
     @property
@@ -169,19 +169,21 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
         self.abortWarmup = False
 
         for lamp in lamps:
-            if lamp not in self.sourcesOn:
+            if lamp not in self.lampsOn:
                 lampState = self.sendOneCommand(f'switch {lamp} on', doClose=True, cmd=cmd)
                 self.genKeys(cmd, lampState, genTimeStamp=True)
 
-        toBeWarmed = lamps if lamps else self.sourcesOn
-        warmingTimes = [lampUtils.warmingTimes[lamp] for lamp in toBeWarmed] if warmingTime is None else len(
-            toBeWarmed) * [warmingTime]
-        remainingTimes = [t - self.lampStates[lamp].elapsed() for t, lamp in zip(warmingTimes, toBeWarmed)]
+        toBeWarmed = lamps if lamps else self.lampsOn
+        if warmingTime is None:
+            warmingTimes = [lampUtils.warmingTimes[lamp] for lamp in toBeWarmed]
+        else:
+            warmingTimes = len(toBeWarmed) * [warmingTime]
 
+        remainingTimes = [t - self.lampStates[lamp].elapsed() for t, lamp in zip(warmingTimes, toBeWarmed)]
         sleepTime = max(remainingTimes) if remainingTimes else 0
 
         if sleepTime > 0:
-            cmd.inform(f'text="warmingTime:{max(warmingTimes)} secs now sleeping for {sleepTime}'"")
+            cmd.inform(f'text="warmingTime:{max(warmingTimes)} now sleeping for {round(sleepTime)} secs'"")
             self.wait(time.time() + sleepTime)
 
     def switchOff(self, cmd, lamps):
@@ -237,7 +239,6 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
             raise RuntimeError(ret)
 
         self.genAllKeys(cmd, states)
-
         self._closeComm(cmd)
 
     def wait(self, end, ti=0.01):
