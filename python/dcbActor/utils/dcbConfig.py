@@ -1,9 +1,9 @@
 __author__ = 'alefur'
 
 import dcbActor.utils.makeLamDesign as lamConfig
+import pandas as pd
 from astropy import time as astroTime
 from pfs.utils.instdata import InstData
-import pandas as pd
 
 
 class CollSet(object):

@@ -2,16 +2,17 @@ __author__ = 'alefur'
 
 import logging
 import time
+from importlib import reload
 
+import dcbActor.utils.lampState as lampUtils
 import enuActor.utils.bufferedSocket as bufferedSocket
 from dcbActor.Simulators.digitalLoggers import SourcesSim
-from dcbActor.utils.lampState import LampState
+
+reload(lampUtils)
 from enuActor.utils.fsmThread import FSMThread
 
 
 class digitalLoggers(FSMThread, bufferedSocket.EthComm):
-    warmingTimes = dict(hgar=15, neon=15, xenon=15, krypton=15, argon=15, qth=60, halogen=60)
-
     def __init__(self, actor, name, loglevel=logging.DEBUG):
         """This sets up the connections to/from the hub, the logger, and the twisted reactor.
 
@@ -59,6 +60,10 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
     def sourcesOn(self):
         return [lamp for lamp in self.lampNames if self.lampStates[lamp].lampOn]
 
+    @property
+    def warmingTimes(self):
+        return self.actor.warmingTimes
+
     def _loadCfg(self, cmd, mode=None):
         """Load sources configuration.
 
@@ -102,7 +107,7 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
         """Instanciate lampState for each lamp and switch them off by safety."""
 
         for lamp in self.lampNames:
-            self.lampStates[lamp] = LampState()
+            self.lampStates[lamp] = lampUtils.LampState()
 
         self.switchOff(cmd, self.lampNames)
 
@@ -169,7 +174,8 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
                 self.genKeys(cmd, lampState, genTimeStamp=True)
 
         toBeWarmed = lamps if lamps else self.sourcesOn
-        warmingTimes = [sources.warmingTimes[lamp] for lamp in toBeWarmed] if warmingTime is None else len(toBeWarmed) * [warmingTime]
+        warmingTimes = [lampUtils.warmingTimes[lamp] for lamp in toBeWarmed] if warmingTime is None else len(
+            toBeWarmed) * [warmingTime]
         remainingTimes = [t - self.lampStates[lamp].elapsed() for t, lamp in zip(warmingTimes, toBeWarmed)]
 
         sleepTime = max(remainingTimes) if remainingTimes else 0

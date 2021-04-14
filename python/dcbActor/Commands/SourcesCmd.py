@@ -77,6 +77,7 @@ class SourcesCmd(object):
     def warmup(self, cmd):
         """Switch on light sources and warm it up if requested, FSM protect from go command."""
         cmdKeys = cmd.cmd.keywords
+
         sourcesOn = cmdKeys['on'].values if 'on' in cmdKeys else []
         warmingTime = cmdKeys['warmingTime'].values[0] if 'warmingTime' in cmdKeys else None
         warmingTime = 0 if 'force' in cmdKeys else warmingTime
@@ -104,7 +105,6 @@ class SourcesCmd(object):
     @blocking
     def prepare(self, cmd):
         """Configure a future illumination sequence."""
-
         cmdKeys = cmd.cmd.keywords
 
         if self.config is not None:
@@ -132,7 +132,6 @@ class SourcesCmd(object):
         ----
         Currently don't clear the predefined sequence.
         """
-
         cmdKeys = cmd.cmd.keywords
 
         if self.config is None or len(self.config) == 0:
@@ -148,7 +147,6 @@ class SourcesCmd(object):
             time.sleep(delay)
 
         self.controller.substates.triggering(cmd)
-
         cmd.finish()
 
     def abort(self, cmd):
