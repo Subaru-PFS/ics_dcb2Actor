@@ -25,7 +25,7 @@ class DcbActor(enuActor):
             except Exception as e:
                 self.logger.warning('text=%s' % self.strTraceback(e))
 
-            self.allControllers = [s.strip() for s in self.config.get(self.name, 'startingControllers').split(',')]
+            self.allControllers = [s.strip() for s in self.config.get(self.name, 'startingControllers').split(',') if s]
             self.attachAllControllers()
             self.everConnected = True
 

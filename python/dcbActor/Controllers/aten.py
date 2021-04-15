@@ -37,7 +37,7 @@ class aten(pdu.pdu):
         self.addStateCB('TRIGGERING', self.doGo)
         self.sim = PduSim()
 
-        self.monitor = 0
+        self.loginTime = 0
         self.abortWarmup = False
         self.config = dict()
         self.lampStates = dict()
@@ -57,7 +57,6 @@ class aten(pdu.pdu):
         :type mode: str
         :raise: Exception if config file is badly formatted.
         """
-        mode = self.actor.config.get('sources', 'mode') if mode is None else mode
         pdu.pdu._loadCfg(self, cmd=cmd, mode=mode)
 
         for lamp in self.lampNames:
@@ -91,7 +90,7 @@ class aten(pdu.pdu):
         :param cmd: current command.
         :raise: Exception with warning message.
         """
-        return self.sendOneCommand('read status o%s simple' % self.powerPorts[lamp], cmd=cmd)
+        return self.safeOneCommand('read status o%s simple' % self.powerPorts[lamp], cmd=cmd)
 
     def genKeys(self, cmd, lamp, state, genTimeStamp=False):
         """ Generate one lamp keywords.
@@ -120,9 +119,8 @@ class aten(pdu.pdu):
                     state = self.getState(lamp, cmd=cmd)
                     cmd.debug(f'text="{lamp}={state}"')
                     if state == desiredState:
-                        if state=='on':
+                        if state == 'on':
                             self.genKeys(cmd, lamp, state, genTimeStamp=True)
-                        #genTimeStamp = state == 'on'
 
                         pending.remove(lamp)
 
@@ -142,7 +140,7 @@ class aten(pdu.pdu):
         toSwitchOn = [lamp for lamp in lamps if lamp not in self.lampsOn]
         for lamp in toSwitchOn:
             outlet = self.powerPorts[lamp]
-            self.sendOneCommand('sw o%s on imme' % outlet, cmd=cmd)
+            self.safeOneCommand('sw o%s on imme' % outlet, cmd=cmd)
         try:
             self.spinAllUntil(cmd, toSwitchOn, 'on')
         except:
@@ -166,7 +164,7 @@ class aten(pdu.pdu):
         outlet = self.powerPorts[lamp]
         cmd.debug(f'text="switching off outlet {outlet}:{lamp} now !"')
 
-        self.sendOneCommand('sw o%s off imme' % outlet, cmd=cmd)
+        self.safeOneCommand('sw o%s off imme' % outlet, cmd=cmd)
         self.genKeys(cmd, lamp, 'off', genTimeStamp=True)
 
     def switchOff(self, cmd, lamps):

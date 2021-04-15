@@ -147,7 +147,7 @@ class SourcesCmd(object):
             time.sleep(delay)
 
         self.controller.substates.triggering(cmd)
-        cmd.finish()
+        self.controller.generate(cmd)
 
     def abort(self, cmd):
         """Abort iis warmup."""
