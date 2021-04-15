@@ -16,7 +16,8 @@ reload(lampUtils)
 
 class aten(pdu.pdu):
     lampNames = ['hgar', 'neon', 'krypton', 'argon', 'halogen']
-
+    bufferTimeout = 3
+    socketTimeout = 3
     def __init__(self, actor, name, loglevel=logging.DEBUG):
         """This sets up the connections to/from the hub, the logger, and the twisted reactor.
 
