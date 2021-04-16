@@ -1,6 +1,9 @@
 __author__ = 'alefur'
 
 from datetime import datetime as dt
+from datetime import timedelta
+
+warmingTimes = dict(hgar=15, neon=15, xenon=15, krypton=15, argon=15, qth=60, halogen=60)
 
 
 class LampState(object):
@@ -33,6 +36,10 @@ class LampState(object):
             self.onTimestamp = dt.utcnow()
         else:
             self.offTimestamp = dt.utcnow()
+
+    def switchOffTiming(self, seconds):
+        """ Predict when the lamp is supposed to turn off """
+        return self.onTimestamp + timedelta(seconds=seconds)
 
     def elapsed(self):
         """ Return number of seconds since the lamp is actually on. """

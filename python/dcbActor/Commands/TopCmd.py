@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 
-import dcbActor.utils.makeLamDesign as lamConfig
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
 from dcbActor.utils.dcbConfig import DcbConfig, CollSet
@@ -172,4 +171,3 @@ class TopCmd(object):
         self.dcbConfig.genKeys(cmd)
 
         cmd.finish()
-
