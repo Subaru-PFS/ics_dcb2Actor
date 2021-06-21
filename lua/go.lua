@@ -2,6 +2,7 @@
 local outlets = require "outlets" -- don't add `.lua` to your `require` call
 local uom = require "uom"
 local stack = require "stack"
+local socket = require("socket")
 
 local function getState()
     local states = {}
@@ -13,14 +14,14 @@ local function getState()
 end
 
 local function switch(lamp, state)
-    bool = stack.stateToBool(state)
+    local bool = stack.stateToBool(state)
     local nOutlet = stack.getOutlet(lamp)
     if not nOutlet then
         error(string.format('unknown lamp : %s', lamp))
     else
         uom.relay.outlets[nOutlet].state = bool
     end
-    local curr = uom.relay.outlets[nOutlet].state
+    bool = uom.relay.outlets[nOutlet].state
     return string.format('%s=%s', lamp, stack.boolToState(bool))
 end
 
@@ -38,6 +39,7 @@ local function fireLamps(client)
     local times = {}
     local lamps = {}
     local olets = {}
+    local doAbort = false
 
     -- gather parameters and initialize
     k = 1
@@ -91,15 +93,26 @@ local function fireLamps(client)
 
     end
     -- loop and turn off lamps at appropriate times
+    client:settimeout(3)
+    nextEvent = stack.getNextEvent(state, stop)
     while (true)
     do
         time = socket.gettime()
         -- client:send(time)
+        if nextEvent - time > 5 then
+            local line, err = client:receive()
+            if line and string.find(line, "abort") then
+                doAbort = true
+                client:send('tcpover\n')
+            end
+
+        end
         for i = 1, nch do
-            if ((state[i] == true) and (time > stop[i])) then
+            if (((state[i] == true) and (time > stop[i])) or doAbort) then
                 uom.relay.outlets[olets[i]].state = false
                 state[i] = false
                 client:send(string.format('%s=offtcpover\n', lamps[i]))
+                nextEvent = stack.getNextEvent(state, stop)
             end
         end
 
@@ -113,6 +126,7 @@ local function fireLamps(client)
         uom.relay.outlets[outlets.loutlets[i]].state = false
     end
 
+    client:settimeout(10)
     return getState()
 
 end

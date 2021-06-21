@@ -82,5 +82,19 @@ local function boolToState(bool)
     end
 end
 
-return { getOutlet = getOutlet, getOutletsConfig = getOutletsConfig, toFloat = toFloat, split = split, writeLamps = writeLamps, readLamps = readLamps, stateToBool = stateToBool, boolToState = boolToState }
+local function getNextEvent(state, stop)
+    local minTime = 0
+    for i = 1, #state do
+        if state[i] then
+            if minTime==0 then
+                minTime = stop[i]
+            else
+                minTime = math.min(minTime, stop[i])
+            end
 
+        end
+    end
+    return minTime
+end
+
+return { getOutlet = getOutlet, getOutletsConfig = getOutletsConfig, toFloat = toFloat, split = split, writeLamps = writeLamps, readLamps = readLamps, stateToBool = stateToBool, boolToState = boolToState, getNextEvent = getNextEvent }
