@@ -256,6 +256,9 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
         """Abort warmup.
         """
         self.abortWarmup = True
+        if self.substates.current=='TRIGGERING':
+            bufferedSocket.EthComm.sendOneCommand(self, 'abort')
+
         while self.currCmd:
             pass
         return
