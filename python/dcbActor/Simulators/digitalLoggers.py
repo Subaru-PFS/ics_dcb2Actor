@@ -36,7 +36,6 @@ class SourcesSim(socket.socket):
             for i in range(int(len(lampsArgs) / 2)):
                 self.config[lampsArgs[2 * i]] = float(lampsArgs[2 * i + 1])
             time.sleep(0.1)
-            print(self.config)
             self.buf.append('OK;;OKtcpover\n')
 
         elif 'getState' in cmdStr:
