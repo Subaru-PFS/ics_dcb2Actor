@@ -17,6 +17,7 @@ class FilterwheelCmd(object):
         #
         self.vocab = [
             ('filterwheel', 'status', self.status),
+            ('filterwheel', 'init', self.initWheel),
             ('set', '@(<linewheel>|<qthwheel>)', self.moveWheel),
             ('init', '@(linewheel|qthwheel)', self.initWheel),
             ('adc', 'calib', self.adcCalib)
@@ -53,24 +54,29 @@ class FilterwheelCmd(object):
             holeDict = self.controller.qthHoles
 
         hole = cmdKeys[wheel].values[0]
-        hole = '{:.1f}'.format(float(hole)) if hole !='none' else hole
-        revHoleDict = dict([(v,k) for k,v in holeDict.items()])
+        hole = '{:.1f}'.format(float(hole)) if hole != 'none' else hole
+        revHoleDict = dict([(v, k) for k, v in holeDict.items()])
 
         if hole not in revHoleDict.keys():
             possibleHoles = ",".join([str(key) for key in revHoleDict.keys()])
             raise ValueError(f'unknown hole:{hole}, existing are {possibleHoles}')
 
         position = revHoleDict[hole]
-        self.controller.moving(wheel=wheel, position=position, cmd=cmd)
+        self.controller.substates.move(wheel=wheel, position=position, cmd=cmd)
         self.controller.generate(cmd)
 
     @blocking
     def initWheel(self, cmd):
         """set linewheel to required position."""
         cmdKeys = cmd.cmd.keywords
-        wheel = 'linewheel' if 'linewheel' in cmdKeys else 'qthwheel'
+        doLineWheel = 'qthwheel' not in cmdKeys
+        doQthWheel = 'linewheel' not in cmdKeys
 
-        self.controller.initWheel(wheel=wheel, cmd=cmd)
+        if self.controller.states.current == 'LOADED':
+            self.controller.substates.init(cmd, doLineWheel=doLineWheel, doQthWheel=doQthWheel)
+        else:
+            self.controller.init(cmd, doLineWheel=doLineWheel, doQthWheel=doQthWheel, doReset=False)
+
         self.controller.generate(cmd)
 
     @blocking

@@ -24,7 +24,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
                   {'name': 'fail', 'src': ['MOVING', ], 'dst': 'FAILED'},
                   ]
 
-        FSMThread.__init__(self, actor, name, events=events, substates=substates, doInit=True)
+        FSMThread.__init__(self, actor, name, events=events, substates=substates, doInit=False)
 
         self.addStateCB('MOVING', self.moving)
         self.sim = FilterwheelSim()
@@ -90,6 +90,49 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         """
         return self.sendOneCommand('adc 1', cmd=cmd)
 
+    def _init(self, cmd, doLineWheel=True, doQthWheel=True, doReset=True):
+        """Initialise both wheel by default
+
+        :param cmd: current command.
+        :raise: Exception with warning message.
+        """
+        if doReset:
+            self.actor.instData.persistKey('linewheel', -1)
+            self.actor.instData.persistKey('qthwheel', -1)
+
+        if doLineWheel:
+            try:
+                self.initWheel(cmd, 'linewheel')
+                cmd.inform('text="line wheel init OK"')
+            except:
+                cmd.warn('text="line wheel init FAILED ! "')
+                raise
+
+        if doQthWheel:
+            try:
+                self.initWheel(cmd, 'qthwheel')
+                cmd.inform('text="qth wheel init OK"')
+            except:
+                cmd.warn('text="qth wheel init FAILED ! "')
+                raise
+
+    def loadWheelPosition(self, wheel):
+        """load persisted wheel position and hole from instdata
+
+        :param cmd: current command.
+        :raise: Exception with warning message.
+        """
+        try:
+            position, = self.actor.instData.loadKey(wheel)
+            holes = self.lineHoles if wheel == 'linewheel' else self.qthHoles
+            hole = holes[position]
+        except:
+            # a bit of flexibility, to be removed later
+            position = -1
+            hole = 'unknown'
+
+        return position, hole
+
     def getStatus(self, cmd):
         """Get all ports status.
 
@@ -99,25 +142,12 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         adc1 = self.sendOneCommand('adc 1', cmd=cmd)
         adc2 = self.sendOneCommand('adc 2', cmd=cmd)
 
-        try:
-            lineWheel, = self.actor.instData.loadKey('linewheel')
-            lineHole = self.lineHoles[lineWheel]
-        except:
-            # a bit of flexibility, to be removed later
-            lineWheel = -1
-            lineHole = 'unknown'
-
-        try:
-            qthWheel, = self.actor.instData.loadKey('qthwheel')
-            qthHole = self.qthHoles[qthWheel]
-        except:
-            # a bit of flexibility, to be removed later
-            qthWheel = -1
-            qthHole = 'unknown'
+        linePosition, lineHole = self.loadWheelPosition('linewheel')
+        qthPosition, qthHole = self.loadWheelPosition('qthwheel')
 
         cmd.inform(f'adc={adc1},{adc2}')
-        cmd.inform(f'linewheel={lineWheel},{lineHole}')
-        cmd.inform(f'qthwheel={qthWheel},{qthHole}')
+        cmd.inform(f'linewheel={linePosition},{lineHole}')
+        cmd.inform(f'qthwheel={qthPosition},{qthHole}')
 
     def moving(self, cmd, wheel, position):
         """Move required wheel to required position
@@ -126,6 +156,10 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         :param position: int(1-5)
         :raise: Exception with warning message.
         """
+        current, __ = self.loadWheelPosition(wheel)
+        if current == -1:
+            raise UserWarning(f'{wheel} has not been initialized properly')
+
         ret = self.sendOneCommand(f'{wheel} {position}', cmd=cmd)
         cmd.inform(f'text="{ret}"')
 
@@ -143,11 +177,13 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         :param position: int(1-5)
         :raise: Exception with warning message.
         """
+        cmd.inform(f'text="initializing {wheel}..."')
+
         ret = self.sendOneCommand(f'{wheel} {-1}', cmd=cmd)
         cmd.inform(f'text="{ret}"')
 
         cmd.inform(f'text="waiting for filterwheel-dcb response within 20 seconds...')
-        self.waitForEndBlock(cmd,  f'Calibrating FW {filterwheel.wheelPort[wheel]}', timeout=30, timeLim=60)
+        self.waitForEndBlock(cmd, f'Calibrating FW {filterwheel.wheelPort[wheel]}', timeout=30, timeLim=60)
         self.waitForEndBlock(cmd, 'Done', timeout=5, timeLim=15)
 
         self.actor.instData.persistKey(wheel, 1)
