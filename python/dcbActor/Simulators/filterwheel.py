@@ -24,8 +24,7 @@ class FilterwheelSim(socket.socket):
         time.sleep(0.02)
         cmdStr = cmdStr.decode()
         cmdStr, __ = cmdStr.split('\r\n')
-        wheelCalib = 'port0 = |UL|  port1 = |LL| \nCalibrating FW 1 \nattached 2 filter wheel(s): \n' \
-                     'index 0: ID 0 Name EFW \nindex 1: ID 1 Name EFW \nselecting 1\nCalibrating \nDone\n'
+
         if 'adc ' in cmdStr:
             self.buf.append('-.0014\n')
 
@@ -33,7 +32,7 @@ class FilterwheelSim(socket.socket):
             __, position = cmdStr.split('linewheel')
             position = int(position)
             if position == -1:
-                self.buf.append(wheelCalib)
+                self.buf.append(self.wheelCalib('line'))
             else:
                 self.buf.append('port0 = UL  port1 = LL\n')
                 self.buf.append('Setting FW 0 to position 1\nattached 2 filter wheel(s):\nindex 0: ID 0 Name EFW \n'
@@ -45,7 +44,7 @@ class FilterwheelSim(socket.socket):
             position = int(position)
 
             if position == -1:
-                self.buf.append(wheelCalib)
+                self.buf.append(self.wheelCalib('qth'))
             else:
                 self.buf.append('port0 = UL  port1 = LL\n')
                 self.buf.append('Setting FW 0 to position 1\nattached 2 filter wheel(s):\nindex 0: ID 0 Name EFW \n'
@@ -64,6 +63,12 @@ class FilterwheelSim(socket.socket):
                             'iteration 5 z1=0.0491  z2=0.0486 \n'
                             '\nZeros for channel 1, 2 = .0491, .0486\n')
 
+
+    def wheelCalib(self, wheel):
+        wheelId = 1 if wheel == 'qth' else 0
+        wheelCalib = f'port0 = |UL|  port1 = |LL| \nCalibrating FW {wheelId} \nattached 2 filter wheel(s): \n' \
+                     'index 0: ID 0 Name EFW \nindex 1: ID 1 Name EFW \nselecting 1\nCalibrating \nDone\n'
+        return wheelCalib
 
     def recv(self, buffersize, flags=None):
         """Return and remove fake response from buffer."""
