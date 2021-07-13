@@ -166,8 +166,6 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
         :type lamps: list.
         :raise: Exception with warning message.
         """
-        self.abortWarmup = False
-
         for lamp in lamps:
             if lamp not in self.lampsOn:
                 lampState = self.sendOneCommand(f'switch {lamp} on', doClose=True, cmd=cmd)
@@ -256,11 +254,12 @@ class digitalLoggers(FSMThread, bufferedSocket.EthComm):
         """Abort warmup.
         """
         self.abortWarmup = True
-        if self.substates.current=='TRIGGERING':
+        if self.substates.current == 'TRIGGERING':
             bufferedSocket.EthComm.sendOneCommand(self, 'abort')
 
         while self.currCmd:
             pass
+        self.abortWarmup = False
         return
 
     def sendOneCommand(self, cmdStr, doClose=False, cmd=None):

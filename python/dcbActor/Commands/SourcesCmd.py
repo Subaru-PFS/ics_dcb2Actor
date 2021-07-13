@@ -146,7 +146,8 @@ class SourcesCmd(object):
             cmd.debug(f'text="will turn on {sources} in {delay}s seconds"')
             time.sleep(delay)
 
-        self.controller.substates.triggering(cmd)
+        if not self.controller.abortWarmup:
+            self.controller.substates.triggering(cmd)
         self.controller.generate(cmd)
 
     def abort(self, cmd):

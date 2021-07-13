@@ -15,6 +15,7 @@ class SourcesSim(socket.socket):
         self.outlets = dict([(lamp, 'off') for lamp in SourcesSim.lampNames])
         self.buf = []
         self.config = dict()
+        self.doAbort = False
 
     def connect(self, server):
         """Fake the connection to tcp server."""
@@ -28,7 +29,7 @@ class SourcesSim(socket.socket):
     def sendall(self, cmdStr, flags=None):
         """Send fake packets, append fake response to buffer."""
         time.sleep(0.02)
-        cmdStr, __ = cmdStr.decode().split('\n')
+        cmdStr, __ = cmdStr.decode().split('\r\n')
 
         if 'prepare' in cmdStr:
             lampsArgs = cmdStr.split(' ')[1:]
@@ -56,7 +57,12 @@ class SourcesSim(socket.socket):
             self.buf.append(f'OK;;{lampState}tcpover\n')
 
         elif 'go' in cmdStr:
+            self.doAbort = False
             self.go()
+
+        elif 'abort' in cmdStr:
+            self.doAbort = True
+            self.buf.append('tcpover\n')
 
     def go(self):
 
@@ -84,7 +90,7 @@ class SourcesSim(socket.socket):
         while 1:
             for i in range(len(lamps)):
                 lamp = lamps[i]
-                if self.outlets[lamp] == 'on' and time.time() > stop[i]:
+                if (self.outlets[lamp] == 'on' and time.time() > stop[i]) or self.doAbort:
                     self.outlets[lamp] = 'off'
                     self.buf.append(f'{lamp}=offtcpover\n')
 
@@ -97,7 +103,7 @@ class SourcesSim(socket.socket):
         return ','.join([f'{lamp}={state}' for lamp, state in self.outlets.items()])
 
     def getOutletsConfig(self):
-        return ','.join([f'outlet0{i+1}={lamp}' for i, lamp in enumerate(self.lampNames)])
+        return ','.join([f'outlet0{i + 1}={lamp}' for i, lamp in enumerate(self.lampNames)])
 
     def recv(self, buffersize, flags=None):
         """Return and remove fake response from buffer."""
