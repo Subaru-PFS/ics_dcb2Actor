@@ -22,11 +22,13 @@ class SourcesCmd(object):
             ('sources', 'status', self.status),
             ('sources', '[<on>] [<warmingTime>] [force]', self.warmup),
             ('sources', '<off>', self.switchOff),
-            ('sources', 'abort', self.abort),
-            ('sources', 'prepare [<halogen>] [<argon>] [<hgar>] [<neon>] [<krypton>]', self.prepare),
-            ('sources', 'go [<delay>]', self.go),
             ('sources', 'stop', self.stop),
             ('sources', 'start [@(operation|simulation)]', self.start),
+
+            ('stop', '', self.abort),
+            ('prepare', '[<halogen>] [<argon>] [<hgar>] [<neon>] [<krypton>]', self.prepare),
+            ('waitForReadySignal', '', self.waitForReadySignal),
+            ('go', '[<delay>]', self.go),
         ]
 
         self.vocab += [('arc', cmdStr, func) for __, cmdStr, func in self.vocab]
@@ -135,7 +137,7 @@ class SourcesCmd(object):
         cmdKeys = cmd.cmd.keywords
 
         if self.config is None or len(self.config) == 0:
-            cmd.finish('text="no lamps are configured to turn on now"')
+            cmd.fail('text="no lamps are configured to turn on now"')
             self.config.clear()
             return
 
@@ -148,12 +150,17 @@ class SourcesCmd(object):
 
         if not self.controller.abortWarmup:
             self.controller.substates.triggering(cmd)
+
         self.controller.generate(cmd)
 
     def abort(self, cmd):
         """Abort iis warmup."""
         self.controller.doAbort()
         cmd.finish("text='warmup aborted'")
+
+    def waitForReadySignal(self, cmd):
+        """to be consistent with pfilamps."""
+        cmd.finish('text="ready')
 
     @singleShot
     def stop(self, cmd):
