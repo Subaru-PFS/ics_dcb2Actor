@@ -94,7 +94,7 @@ class TopCmd(object):
         cmd.inform('text="config id=0x%08x %r"' % (id(self.actor.config),
                                                    self.actor.config.sections()))
 
-        self.actor.updateStates(cmd=cmd)
+        self.actor.metaStates.update(cmd)
 
         if 'all' in cmdKeys:
             for controller in self.actor.controllers:
