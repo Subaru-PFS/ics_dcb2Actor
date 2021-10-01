@@ -28,7 +28,8 @@ class SourcesCmd(object):
             ('stop', '', self.abort),
             ('prepare', '[<halogen>] [<argon>] [<hgar>] [<neon>] [<krypton>]', self.prepare),
             ('waitForReadySignal', '', self.waitForReadySignal),
-            ('go', '[<delay>]', self.go),
+            ('go', '[<delay>]', self.timedGoSequence),
+            ('go', '@(noWait) [<delay>]', self.goNoWait),
         ]
 
         self.vocab += [('arc', cmdStr, func) for __, cmdStr, func in self.vocab]
@@ -41,11 +42,11 @@ class SourcesCmd(object):
                                         keys.Key("off", types.String() * (1, None),
                                                  help='which outlet to switch off.'),
                                         keys.Key("warmingTime", types.Float(), help="customizable warming time"),
-                                        keys.Key("halogen", types.Float(), help="requested quartz halogen lamp time"),
-                                        keys.Key("argon", types.Float(), help="requested Ar lamp time"),
-                                        keys.Key("hgar", types.Float(), help="requested HgAr lamp time"),
-                                        keys.Key("neon", types.Float(), help="requested Ne lamp time"),
-                                        keys.Key("krypton", types.Float(), help="requested Kr lamp time"),
+                                        keys.Key("halogen", types.Int(), help="requested quartz halogen lamp time"),
+                                        keys.Key("argon", types.Int(), help="requested Ar lamp time"),
+                                        keys.Key("hgar", types.Int(), help="requested HgAr lamp time"),
+                                        keys.Key("neon", types.Int(), help="requested Ne lamp time"),
+                                        keys.Key("krypton", types.Int(), help="requested Kr lamp time"),
                                         keys.Key("delay", types.Float(), help="delay before turning lamps on"),
                                         )
 
@@ -127,21 +128,41 @@ class SourcesCmd(object):
         cmd.finish('text="will turn on: %s"' % (self.lampString))
 
     @blocking
-    def go(self, cmd):
-        """Run the preconfigured illumination sequence.
-
-        Note
-        ----
-        Currently don't clear the predefined sequence.
-        """
+    def timedGoSequence(self, cmd):
+        """ Start go command, return until completion. """
         cmdKeys = cmd.cmd.keywords
+        delay = cmdKeys['delay'].values[0] if 'delay' in cmdKeys else 0.0
 
         if self.config is None or len(self.config) == 0:
             cmd.fail('text="no lamps are configured to turn on now"')
             self.config.clear()
             return
 
+        self.go(cmd, delay=delay)
+
+    def goNoWait(self, cmd):
+        """ Start go command, return immediately. """
+        if self.controller.currCmd:
+            raise RuntimeWarning('%s thread is busy' % self.controller.name)
+
+        if self.config is None or len(self.config) == 0:
+            cmd.fail('text="no lamps are configured to turn on now"')
+            self.config.clear()
+            return
+
+        cmdKeys = cmd.cmd.keywords
         delay = cmdKeys['delay'].values[0] if 'delay' in cmdKeys else 0.0
+
+        self.controller.putMsg(self.go, cmd=self.actor.bcast, delay=delay)
+        cmd.finish('text="return immediately"')
+
+    def go(self, cmd, delay):
+        """Run the preconfigured illumination sequence.
+
+       Note
+       ----
+       Currently don't clear the predefined sequence.
+        """
         sources = tuple(self.config.keys())
 
         if delay > 0:
@@ -156,11 +177,18 @@ class SourcesCmd(object):
     def abort(self, cmd):
         """Abort iis warmup."""
         self.controller.doAbort()
-        cmd.finish("text='warmup aborted'")
+        cmd.finish('text="warmup aborted"')
 
     def waitForReadySignal(self, cmd):
         """to be consistent with pfilamps."""
-        cmd.finish('text="ready')
+        if 'hgar' in self.config:
+            self.controller.substates.warming(cmd, lamps=['hgar'], warmingTime=90)
+            self.controller.switchOff(cmd, ['hgar'])
+        elif 'halogen' in self.config:
+            time.sleep(5)
+        else:
+            time.sleep(2)
+        cmd.finish('text="lamps are ready"')
 
     @singleShot
     def stop(self, cmd):
