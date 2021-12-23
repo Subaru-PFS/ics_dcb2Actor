@@ -2,7 +2,7 @@
 
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
-from enuActor.utils.wrap import threaded, blocking
+from ics.utils.threading import threaded, blocking
 
 
 class FilterwheelCmd(object):

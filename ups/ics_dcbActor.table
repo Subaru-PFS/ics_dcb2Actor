@@ -1,5 +1,4 @@
 setupRequired(tron_actorcore)
-setupRequired(ics_enuActor >= 1.1.10)
 
 pathPrepend(PATH, ${PRODUCT_DIR}/bin)
 pathPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
