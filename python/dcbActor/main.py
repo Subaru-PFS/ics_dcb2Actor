@@ -3,31 +3,50 @@
 import argparse
 import logging
 
-from enuActor.main import enuActor
+import ics.utils.fsm.fsmActor as fsmActor
 
 
-class DcbActor(enuActor):
+class DcbActor(fsmActor.FsmActor):
+    knownControllers = ['lamps', 'filterwheel']
+    # we start everything by default
+    startingControllers = knownControllers
+
     def __init__(self, name, productName=None, configFile=None, logLevel=logging.INFO):
         # This sets up the connections to/from the hub, the logger, and the twisted reactor.
         #
-        enuActor.__init__(self, name,
-                          productName=productName,
-                          configFile=configFile)
+        fsmActor.FsmActor.__init__(self, name,
+                                   productName=productName,
+                                   configFile=configFile,
+                                   logLevel=logLevel)
 
-    def connectionMade(self):
-        """Attach all controllers."""
-        if self.everConnected is False:
-            logging.info("Attaching all controllers...")
-            setup = self.config.get(self.name, 'illumination').strip()
-            sources = self.config.get(setup, 'pdu').strip()
+    def letsGetReadyToRumble(self):
+        """ Just startup nicely."""
+
+        toStart = list(set(DcbActor.startingControllers) - set(self.ignoreControllers))
+
+        for controller in toStart:
+           self.connect(controller)
+
+    def attachController(self, name, instanceName=None, **kwargs):
+        """" regular ICC attach controller with a gotcha for lamps"""
+
+        def findPduModel():
+            """ Find pduModel being used from config file. """
             try:
-                self.connect(sources, instanceName="sources")
-            except Exception as e:
-                self.logger.warning('text=%s' % self.strTraceback(e))
+                pduModel = self.config.get('lamps', 'pduModel').strip()
+            except:
+                raise RuntimeError(f'lamps pdu model is not properly described')
 
-            self.allControllers = [s.strip() for s in self.config.get(self.name, 'startingControllers').split(',') if s]
-            self.attachAllControllers()
-            self.everConnected = True
+            if pduModel not in ['aten', 'digitalLoggers']:
+                raise ValueError(f'unknown pduModel : {pduModel}')
+
+            return pduModel
+
+        if name == 'lamps':
+            name = findPduModel()
+            instanceName = 'lamps'
+
+        return fsmActor.FsmActor.attachController(self, name, instanceName=instanceName, **kwargs)
 
 
 def main():
