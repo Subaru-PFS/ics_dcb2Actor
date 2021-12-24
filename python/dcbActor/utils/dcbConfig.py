@@ -3,13 +3,13 @@ __author__ = 'alefur'
 import dcbActor.utils.makeLamDesign as lamConfig
 import pandas as pd
 from astropy import time as astroTime
-from pfs.utils.instdata import InstData
+from ics.utils.instdata import InstData
 
 
 class CollSet(object):
     """Placeholder to handle collimator set configuration"""
-    knownSets = ['set1', 'set2', 'set3', 'set4', 'oneColl']
     nColls = dict(set1=5, set2=5, set3=5, set4=5, oneColl=1)
+    knownSets = list(nColls.keys())
 
     def __init__(self, dcbActor, setName):
         if setName not in CollSet.knownSets:

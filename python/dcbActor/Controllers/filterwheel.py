@@ -3,9 +3,9 @@ __author__ = 'alefur'
 import logging
 import time
 
-import enuActor.utils.bufferedSocket as bufferedSocket
+import ics.utils.tcp.bufferedSocket as bufferedSocket
 from dcbActor.Simulators.filterwheel import FilterwheelSim
-from enuActor.utils.fsmThread import FSMThread
+from ics.utils.fsm.fsmThread import FSMThread
 
 
 class filterwheel(FSMThread, bufferedSocket.EthComm):
@@ -14,7 +14,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
     def __init__(self, actor, name, loglevel=logging.DEBUG):
         """This sets up the connections to/from the hub, the logger, and the twisted reactor.
 
-        :param actor: enuActor.
+        :param actor: dcbActor.
         :param name: controller name.
         :type name: str
         """
@@ -24,7 +24,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
                   {'name': 'fail', 'src': ['MOVING', ], 'dst': 'FAILED'},
                   ]
 
-        FSMThread.__init__(self, actor, name, events=events, substates=substates, doInit=False)
+        FSMThread.__init__(self, actor, name, events=events, substates=substates)
 
         self.addStateCB('MOVING', self.moving)
         self.sim = FilterwheelSim()
