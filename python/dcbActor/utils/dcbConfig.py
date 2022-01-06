@@ -2,7 +2,7 @@ __author__ = 'alefur'
 
 import dcbActor.utils.makeLamDesign as lamConfig
 import pandas as pd
-from astropy import time as astroTime
+from ics.utils import time as pfsTime
 from ics.utils.instdata import InstData
 
 
@@ -118,7 +118,7 @@ class CollSet(object):
 
             cmd.inform(f'text="declaring {fNumber} for {self.setName}:coll{iColl}')
 
-        self.dcbActor.instData.persistKey(self.masksKey, float(astroTime.Time.now().mjd), fNumbers)
+        self.dcbActor.instData.persistKey(self.masksKey, float(pfsTime.Time.now().mjd), fNumbers)
 
     def declareBundles(self, cmd, bundleSet, colls=None):
         """Persist fiber bundles configuration for that collimator set.
@@ -146,7 +146,7 @@ class CollSet(object):
 
             cmd.inform(f'text="declaring {bundle} for {self.setName}:coll{iColl}')
 
-        self.dcbActor.instData.persistKey(self.bundlesKey, float(astroTime.Time.now().mjd), bundles)
+        self.dcbActor.instData.persistKey(self.bundlesKey, float(pfsTime.Time.now().mjd), bundles)
 
     def dataFrame(self):
         """Generate pandas dataframe describing collimator set
