@@ -2,10 +2,13 @@ __author__ = 'alefur'
 
 import logging
 import time
+from importlib import reload
 
+import dcbActor.Simulators.filterwheel as simulator
 import ics.utils.tcp.bufferedSocket as bufferedSocket
-from dcbActor.Simulators.filterwheel import FilterwheelSim
 from ics.utils.fsm.fsmThread import FSMThread
+
+reload(simulator)
 
 
 class filterwheel(FSMThread, bufferedSocket.EthComm):
@@ -27,7 +30,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         FSMThread.__init__(self, actor, name, events=events, substates=substates)
 
         self.addStateCB('MOVING', self.moving)
-        self.sim = FilterwheelSim()
+        self.sim = simulator.FilterwheelSim()
 
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(loglevel)
