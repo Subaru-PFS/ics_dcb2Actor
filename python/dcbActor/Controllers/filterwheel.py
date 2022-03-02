@@ -184,10 +184,15 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
 
         ret = self.sendOneCommand(f'{wheel} {-1}', cmd=cmd)
         cmd.inform(f'text="{ret}"')
-
-        cmd.inform(f'text="waiting for filterwheel-dcb response within 20 seconds...')
+        # declaring which wheel is going to be calibrated.
         self.waitForEndBlock(cmd, f'Calibrating FW {filterwheel.wheelPort[wheel]}', timeout=30, timeLim=60)
-        self.waitForEndBlock(cmd, 'Done', timeout=5, timeLim=15)
+        # wait for the start the calibration
+        self.waitForEndBlock(cmd, f'Calibrating')
+        # wait for DONE or CALIBRATE FAILED basically.
+        try:
+            self.waitForEndBlock(cmd, 'Done', timeout=10, timeLim=30)
+        except TimeoutError:
+            raise RuntimeError(f'{wheel} CALIBRATION FAILED !')
 
         self.actor.instData.persistKey(wheel, 1)
 
