@@ -68,13 +68,16 @@ class FilterwheelCmd(object):
             wheel = 'qthwheel'
             holeDict = self.controller.qthHoles
 
-        hole = cmdKeys[wheel].values[0]
-        hole = '{:.1f}'.format(float(hole)) if hole != 'none' else hole
         revHoleDict = dict([(v, k) for k, v in holeDict.items()])
+        existingHoles = ",".join([str(key) for key in revHoleDict.keys()])
+        hole = cmdKeys[wheel].values[0]
 
         if hole not in revHoleDict.keys():
-            possibleHoles = ",".join([str(key) for key in revHoleDict.keys()])
-            raise ValueError(f'unknown hole:{hole}, existing are {possibleHoles}')
+            try:
+                hole = '{:.1f}'.format(float(hole))
+                position = revHoleDict[hole]
+            except:
+                raise ValueError(f'unknown hole:{hole}, existing are {existingHoles}')
 
         position = revHoleDict[hole]
         self.controller.substates.move(wheel=wheel, position=position, cmd=cmd)
