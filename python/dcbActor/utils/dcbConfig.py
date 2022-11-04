@@ -3,7 +3,7 @@ __author__ = 'alefur'
 import dcbActor.utils.makeLamDesign as lamConfig
 import pandas as pd
 from ics.utils import time as pfsTime
-from ics.utils.instdata import InstData
+from ics.utils.instdata.actordata import ActorData
 
 
 class CollSet(object):
@@ -58,7 +58,7 @@ class CollSet(object):
             f-Numbers values.
         """
         try:
-            fNumbers = InstData.loadPersisted(dcb, self.masksKey)
+            fNumbers = ActorData.loadPersisted(dcb, self.masksKey)
         except:
             fNumbers = 0, ('none',) * self.nColls
 
@@ -89,7 +89,7 @@ class CollSet(object):
             plugged fiber bundle.
         """
         try:
-            bundles = InstData.loadPersisted(self.dcbActor.name, self.bundlesKey)
+            bundles = ActorData.loadPersisted(self.dcbActor.name, self.bundlesKey)
         except:
             bundles = 0, ('none',) * self.nColls
 
@@ -118,7 +118,7 @@ class CollSet(object):
 
             cmd.inform(f'text="declaring {fNumber} for {self.setName}:coll{iColl}')
 
-        self.dcbActor.instData.persistKey(self.masksKey, float(pfsTime.Time.now().mjd), fNumbers)
+        self.dcbActor.actorData.persistKey(self.masksKey, float(pfsTime.Time.now().mjd), fNumbers)
 
     def declareBundles(self, cmd, bundleSet, colls=None):
         """Persist fiber bundles configuration for that collimator set.
@@ -146,7 +146,7 @@ class CollSet(object):
 
             cmd.inform(f'text="declaring {bundle} for {self.setName}:coll{iColl}')
 
-        self.dcbActor.instData.persistKey(self.bundlesKey, float(pfsTime.Time.now().mjd), bundles)
+        self.dcbActor.actorData.persistKey(self.bundlesKey, float(pfsTime.Time.now().mjd), bundles)
 
     def dataFrame(self):
         """Generate pandas dataframe describing collimator set

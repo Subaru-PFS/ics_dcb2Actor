@@ -100,8 +100,8 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         :raise: Exception with warning message.
         """
         if doReset:
-            self.actor.instData.persistKey('linewheel', -1)
-            self.actor.instData.persistKey('qthwheel', -1)
+            self.actor.actorData.persistKey('linewheel', -1)
+            self.actor.actorData.persistKey('qthwheel', -1)
 
         if doLineWheel:
             try:
@@ -126,7 +126,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         :raise: Exception with warning message.
         """
         try:
-            position, = self.actor.instData.loadKey(wheel)
+            position, = self.actor.actorData.loadKey(wheel)
             holes = self.lineHoles if wheel == 'linewheel' else self.qthHoles
             hole = holes[position]
         except:
@@ -171,7 +171,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         __, position = ret.split('Moved to position')
         position = int(position)
 
-        self.actor.instData.persistKey(wheel, position)
+        self.actor.actorData.persistKey(wheel, position)
 
     def initWheel(self, cmd, wheel):
         """Init required wheel
@@ -194,7 +194,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         except TimeoutError:
             raise RuntimeError(f'{wheel} CALIBRATION FAILED !')
 
-        self.actor.instData.persistKey(wheel, 1)
+        self.actor.actorData.persistKey(wheel, 1)
 
     def adcCalib(self, cmd):
         """zeros adc channels.
