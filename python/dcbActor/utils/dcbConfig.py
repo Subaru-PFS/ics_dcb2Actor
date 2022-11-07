@@ -3,7 +3,6 @@ __author__ = 'alefur'
 import dcbActor.utils.makeLamDesign as lamConfig
 import pandas as pd
 from ics.utils import time as pfsTime
-from ics.utils.instdata.actordata import ActorData
 
 
 class CollSet(object):
@@ -58,7 +57,7 @@ class CollSet(object):
             f-Numbers values.
         """
         try:
-            fNumbers = ActorData.loadPersisted(dcb, self.masksKey)
+            fNumbers = self.dcbActor.actorData.loadKey(self.masksKey, actorName=dcb)
         except:
             fNumbers = 0, ('none',) * self.nColls
 
@@ -89,7 +88,7 @@ class CollSet(object):
             plugged fiber bundle.
         """
         try:
-            bundles = ActorData.loadPersisted(self.dcbActor.name, self.bundlesKey)
+            bundles = self.dcbActor.actorData.loadKey(self.bundlesKey, actorName=self.dcbActor.name)
         except:
             bundles = 0, ('none',) * self.nColls
 
