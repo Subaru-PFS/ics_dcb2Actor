@@ -11,7 +11,7 @@ class TopCmd(object):
     def __init__(self, actor):
         # This lets us access the rest of the actor.
         self.actor = actor
-        self.dcbConfig = DcbConfig(actor)
+
         # Declare the commands we implement. When the actor is started
         # these are registered with the parser, which will call the
         # associated methods when matched. The callbacks will be
@@ -48,6 +48,10 @@ class TopCmd(object):
                                         keys.Key("set4", types.String() * (1, None), help='collimator set 4 config'),
                                         keys.Key("oneColl", types.String() * (1, None), help='one collimator'),
                                         )
+
+    @property
+    def dcbConfig(self):
+        return self.actor.dcbConfig
 
     def monitor(self, cmd):
         """ Enable/disable/adjust period controller monitors. """
@@ -89,8 +93,8 @@ class TopCmd(object):
         """Report camera status and actor version. """
         cmdKeys = cmd.cmd.keywords
         self.actor.sendVersionKey(cmd)
-        cmd.inform('text=%s' % ("Present!"))
-        cmd.inform('text="monitors: %s"' % (self.actor.monitors))
+        cmd.inform('text=%s' % "Present!")
+        cmd.inform('text="monitors: %s"' % self.actor.monitors)
         cmd.inform('text="config id=0x%08x %r"' % (id(self.actor.config),
                                                    self.actor.config.sections()))
 
@@ -102,6 +106,9 @@ class TopCmd(object):
         if 'controllers' in cmdKeys:
             for controller in cmdKeys['controllers'].values:
                 self.actor.callCommand("%s status" % controller)
+
+        if not self.dcbConfig:
+            self.actor.reloadConfiguration()
 
         self.dcbConfig.genKeys(cmd)
         cmd.finish(self.controllerKey())

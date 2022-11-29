@@ -2,8 +2,12 @@
 
 import argparse
 import logging
+from importlib import reload
 
+import dcbActor.utils.dcbConfig as dcbConfig
 import ics.utils.fsm.fsmActor as fsmActor
+
+reload(dcbConfig)
 
 
 class DcbActor(fsmActor.FsmActor):
@@ -14,21 +18,27 @@ class DcbActor(fsmActor.FsmActor):
     def __init__(self, name, productName=None, configFile=None, logLevel=logging.INFO):
         # This sets up the connections to/from the hub, the logger, and the twisted reactor.
         #
+        self.dcbConfig = None
         fsmActor.FsmActor.__init__(self, name,
                                    productName=productName,
                                    configFile=configFile,
                                    logLevel=logLevel)
 
     def letsGetReadyToRumble(self):
-        """ Just startup nicely."""
+        """Just startup nicely."""
 
         toStart = list(set(DcbActor.startingControllers) - set(self.ignoreControllers))
 
         for controller in toStart:
-           self.connect(controller)
+            self.connect(controller)
+
+    def reloadConfiguration(self, cmd):
+        """Reload dcb configuration and keywords."""
+        self.dcbConfig = dcbConfig.DcbConfig(self)
+        self.dcbConfig.genKeys(cmd)
 
     def attachController(self, name, instanceName=None, **kwargs):
-        """" regular ICC attach controller with a gotcha for lamps"""
+        """Regular ICC attach controller with a gotcha for lamps."""
 
         def findPduModel():
             """ Find pduModel being used from config file. """
