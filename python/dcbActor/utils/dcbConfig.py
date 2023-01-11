@@ -201,12 +201,12 @@ class DcbConfig(object):
 
     def fetchIlluminationSetup(self):
         """Load illumination setup(1-2)."""
-        setup = self.actor.config.get(self.actor.name, 'illumination').strip()
+        setup = self.actor.actorConfig['illumination']['setup']
         return self.fetchCollSets(setup)
 
     def fetchCollSets(self, setup):
         """Instantiate Collimator Sets from loaded dcb setup."""
-        setNames = [setName.strip() for setName in self.actor.config.get(setup, 'collSets').split(',')]
+        setNames = self.actor.actorConfig['setups'][setup]
         return dict([(setName, CollSet(self.actor, setName)) for setName in setNames])
 
     def declareMasks(self, cmd, colls=None, **fNumbers):

@@ -43,8 +43,8 @@ class DcbActor(fsmActor.FsmActor):
         def findPduModel():
             """ Find pduModel being used from config file. """
             try:
-                pduModel = self.config.get('lamps', 'pduModel').strip()
-            except:
+                pduModel = self.actorConfig['lamps']['pduModel']
+            except KeyError:
                 raise RuntimeError(f'lamps pdu model is not properly described')
 
             if pduModel not in ['aten', 'digitalLoggers']:

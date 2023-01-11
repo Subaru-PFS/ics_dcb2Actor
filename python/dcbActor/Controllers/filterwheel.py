@@ -47,13 +47,11 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
 
     @property
     def lineHoles(self):
-        return dict(
-            [(i + 1, h.strip()) for i, h in enumerate(self.actor.config.get('filterwheel', 'lineHoles').split(','))])
+        return dict([(i + 1, str(h).strip()) for i, h in enumerate(self.controllerConfig['lineHoles'])])
 
     @property
     def qthHoles(self):
-        return dict(
-            [(i + 1, h.strip()) for i, h in enumerate(self.actor.config.get('filterwheel', 'qthHoles').split(','))])
+        return dict([(i + 1, str(h).strip()) for i, h in enumerate(self.controllerConfig['qthHoles'])])
 
     def _loadCfg(self, cmd, mode=None):
         """Load filterwheel configuration.
@@ -63,10 +61,10 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         :type mode: str
         :raise: Exception if config file is badly formatted.
         """
-        self.mode = self.actor.config.get('filterwheel', 'mode') if mode is None else mode
+        self.mode = self.controllerConfig['mode'] if mode is None else mode
         bufferedSocket.EthComm.__init__(self,
-                                        host=self.actor.config.get('filterwheel', 'host'),
-                                        port=int(self.actor.config.get('filterwheel', 'port')),
+                                        host=self.controllerConfig['host'],
+                                        port=self.controllerConfig['port'],
                                         EOL='\r\n')
 
     def _openComm(self, cmd):
