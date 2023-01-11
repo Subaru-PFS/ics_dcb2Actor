@@ -295,6 +295,8 @@ class DcbConfig(object):
 
         colors = dcbKeys.bundle.values.tolist()
         pfiDesignId = lamConfig.hashColors(colors)
+        # Persisting pfsDesignId.
+        self.actor.actorData.persistKey('pfsDesignId', '0x%016x' % pfiDesignId)
 
         cmd.inform('designId=0x%016x' % pfiDesignId)
         cmd.inform('fiberConfig="%s"' % ';'.join(colors))
