@@ -2,9 +2,10 @@
 
 import time
 
+import ics.utils.tcp.utils as tcpUtils
 import opscore.protocols.keys as keys
 import opscore.protocols.types as types
-from ics.utils.threading import threaded, blocking
+from ics.utils.threading import threaded, blocking, singleShot
 
 
 class FilterwheelCmd(object):
@@ -28,7 +29,8 @@ class FilterwheelCmd(object):
             ('adc', 'calib', self.adcCalib),
 
             ('filterwheel', 'reboot', self.reboot),
-            ('power', '@(off|on) @filterwheel', self.reboot)
+            ('power', '@(off|on) @filterwheel', self.reboot),
+            ('filterwheel', 'start', self.start)
 
         ]
 
@@ -51,6 +53,9 @@ class FilterwheelCmd(object):
             return self.actor.controllers['lamps']
         except KeyError:
             raise RuntimeError('lamps controller is not connected.')
+
+    def config(self, option):
+        return self.actor.actorConfig['filterwheel'][option]
 
     @threaded
     def status(self, cmd):
@@ -119,16 +124,49 @@ class FilterwheelCmd(object):
         elif 'off' in cmdKeys:
             powerOff = True
 
-        if powerOff:
-            self.pdu.crudeSwitch(cmd, 'filterwheel', 'off')
+        self.slapController(cmd, powerOn=powerOn, powerOff=powerOff)
+
+        cmd.finish()
+
+    def slapController(self, cmd, powerOn, powerOff):
+        """Switch filterwheel controller given powerOn and powerOff boolean."""
+
+        def powerSwitch(cmd, state):
+            """Trigger filterwheel power switch"""
+            self.pdu.crudeSwitch(cmd, 'filterwheel', state)
             self.pdu.getStatus(cmd)
+
+        if powerOff:
+            powerSwitch(cmd, 'off')
 
         if powerOff and powerOn:
             cmd.inform(f'text="waiting now {FilterwheelCmd.waitBetweenSwitch} secs"')
             time.sleep(FilterwheelCmd.waitBetweenSwitch)
 
         if powerOn:
-            self.pdu.crudeSwitch(cmd, 'filterwheel', 'on')
-            self.pdu.getStatus(cmd)
+            powerSwitch(cmd, 'on')
 
-        cmd.finish()
+    @singleShot
+    def start(self, cmd):
+        """Power on hxp controller, connect slit controller, and init."""
+        cmdKeys = cmd.cmd.keywords
+
+        host, port = self.config('host'), int(self.config('port'))
+
+        mode = self.config('mode')
+        mode = 'operation' if 'operation' in cmdKeys else mode
+        mode = 'simulation' if 'simulation' in cmdKeys else mode
+
+        # if filterwheel server is down.
+        if mode == 'operation' and not tcpUtils.serverIsUp(host, port):
+            self.slapController(cmd, powerOff=True, powerOn=True)
+            tcpUtils.waitForTcpServer(host, port, cmd=cmd)
+
+        # connect controller.
+        self.actor.connect('filterwheel', cmd=cmd, mode=mode)
+
+        # init is required if LOADED state.
+        if self.controller.states.current == 'LOADED':
+            self.controller.substates.init(cmd)
+
+        self.controller.generate(cmd)
