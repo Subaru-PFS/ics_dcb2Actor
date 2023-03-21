@@ -112,27 +112,30 @@ class TopCmd(object):
         cmd.finish(self.controllerKey())
 
     def declareMasks(self, cmd):
-        def retrieveFNumber(key):
-            val = str(cmdKeys[key].values[0])
-            try:
-                fNumber = DcbConfig.validFNumbers[val]
-            except KeyError:
-                raise ValueError(f'wrong f-number:{val}, valid:{",".join(DcbConfig.validFNumberKeys)}')
-            return fNumber
+        def retrieveFNumber(vals):
+            fNumbers = []
+
+            for val in vals:
+                try:
+                    fNumbers.append(DcbConfig.validFNumbers[str(val)])
+                except KeyError:
+                    raise ValueError(f'wrong f-number:{val}, valid:{",".join(DcbConfig.validFNumberKeys)}')
+
+            return fNumbers
 
         cmdKeys = cmd.cmd.keywords
         fNumbers = dict()
         fNumbers['colls'] = cmdKeys['colls'].values if 'colls' in cmdKeys else None
 
-        if 'install' in cmdKeys:
-            fNumber = retrieveFNumber('install')
-            setNames = cmdKeys['into'].values if 'into' in cmdKeys else self.dcbConfig.setNames
-            for setName in setNames:
-                fNumbers[setName] = fNumber
+        # if 'install' in cmdKeys:
+        #     fNumber = retrieveFNumber('install')
+        #     setNames = cmdKeys['into'].values if 'into' in cmdKeys else self.dcbConfig.setNames
+        #     for setName in setNames:
+        #         fNumbers[setName] = fNumber
 
         for i, setName in enumerate(CollSet.knownSets):
             if setName in cmdKeys:
-                fNumbers[setName] = retrieveFNumber(setName)
+                fNumbers[setName] = retrieveFNumber(cmdKeys[setName].values)
 
         self.dcbConfig.declareMasks(cmd, **fNumbers)
         self.dcbConfig.genKeys(cmd)

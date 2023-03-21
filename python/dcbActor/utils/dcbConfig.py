@@ -94,7 +94,7 @@ class CollSet(object):
 
         return bundles
 
-    def declareMasks(self, cmd, fNumber, colls=None):
+    def declareMasks(self, cmd, fNumbers, colls=None):
         """Persist masks configuration for that collimator set.
 
         Parameters
@@ -106,10 +106,9 @@ class CollSet(object):
         fNumber : `str`
             fNumber value to apply.
         """
-        fNumbers = list(self.fNumbers)
-
         iColls = self.iColls if colls is None else colls
-        for iColl in iColls:
+
+        for iColl, fNumber in zip(iColls, fNumbers):
             try:
                 fNumbers[iColl - 1] = fNumber
             except IndexError:
