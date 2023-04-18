@@ -93,8 +93,7 @@ class TopCmd(object):
         self.actor.sendVersionKey(cmd)
         cmd.inform('text=%s' % "Present!")
         cmd.inform('text="monitors: %s"' % self.actor.monitors)
-        cmd.inform('text="config id=0x%08x %r"' % (id(self.actor.config),
-                                                   self.actor.config.sections()))
+        cmd.inform('text="config id=0x%08x %r"' % (id(self.actor.actorConfig), self.actor.actorConfig.keys()))
 
         self.actor.metaStates.update(cmd)
 
