@@ -28,6 +28,8 @@ class TopCmd(object):
             ('declareMasks', f'<install> [<into>] [<colls>]', self.declareMasks),
             ('declareBundles', f'{collSets} [<colls>]', self.declareBundles),
             ('declareBundles', f'<install> [<into>] [<colls>]', self.declareBundles),
+
+            ('power', '@(off|on) @cableB', self.powerCableBIlluminator),
         ]
 
         # Define typed command arguments for the above commands.
@@ -52,6 +54,13 @@ class TopCmd(object):
     @property
     def dcbConfig(self):
         return self.actor.dcbConfig
+
+    @property
+    def pdu(self):
+        try:
+            return self.actor.controllers['lamps']
+        except KeyError:
+            raise RuntimeError('lamps controller is not connected.')
 
     def monitor(self, cmd):
         """ Enable/disable/adjust period controller monitors. """
@@ -176,5 +185,16 @@ class TopCmd(object):
 
         self.dcbConfig.declareBundles(cmd, **bundleSets)
         self.dcbConfig.genKeys(cmd)
+
+        cmd.finish()
+
+    def powerCableBIlluminator(self, cmd):
+        """Switch on/off cableB illuminator."""
+        cmdKeys = cmd.cmd.keywords
+
+        state = 'on' if 'on' in cmdKeys else 'off'
+
+        self.pdu.crudeSwitch(cmd, 'cableB', state)
+        self.pdu.getStatus(cmd)
 
         cmd.finish()
