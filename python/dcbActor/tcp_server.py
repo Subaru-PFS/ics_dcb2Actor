@@ -21,7 +21,7 @@ def signal_handler(sig, frame, server_socket):
 
 
 def main():
-    host = 'filterheel-dcb'
+    host = 'filterwheel-dcb'
     port = 9000
 
     try:

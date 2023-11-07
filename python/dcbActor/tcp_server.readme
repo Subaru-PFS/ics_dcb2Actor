@@ -1,0 +1,7 @@
+# installation instruction for tcp server
+
+1. reboot in r/w mode using reboot_n
+2. cp tcp_server.py to /usr/local/bin
+3. cp tcp_server.service to /etc/systemd/system/
+4. sudo systemctl enable tcp_server
+5. reboot in normal mode using reboot
