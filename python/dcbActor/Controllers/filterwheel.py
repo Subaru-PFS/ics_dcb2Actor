@@ -12,7 +12,8 @@ reload(simulator)
 
 
 class filterwheel(FSMThread, bufferedSocket.EthComm):
-    wheelPort = dict(linewheel=0, qthwheel=1)
+    wheelPortConfig = dict(dcb=dict(linewheel=1, qthwheel=0),
+                           dcb2=dict(linewheel=0, qthwheel=1))
 
     def __init__(self, actor, name, loglevel=logging.DEBUG):
         """This sets up the connections to/from the hub, the logger, and the twisted reactor.
@@ -30,7 +31,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         FSMThread.__init__(self, actor, name, events=events, substates=substates)
 
         self.addStateCB('MOVING', self.moving)
-        self.sim = simulator.FilterwheelSim()
+        self.sim = simulator.FilterwheelSim(self.actor.name)
 
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(loglevel)
@@ -62,6 +63,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         :raise: Exception if config file is badly formatted.
         """
         self.mode = self.controllerConfig['mode'] if mode is None else mode
+        self.wheelPort = self.wheelPortConfig[self.actor.name]
         bufferedSocket.EthComm.__init__(self,
                                         host=self.controllerConfig['host'],
                                         port=self.controllerConfig['port'],
@@ -183,7 +185,7 @@ class filterwheel(FSMThread, bufferedSocket.EthComm):
         ret = self.sendOneCommand(f'{wheel} {-1}', cmd=cmd)
         cmd.inform(f'text="{ret}"')
         # declaring which wheel is going to be calibrated.
-        self.waitForEndBlock(cmd, f'Calibrating FW {filterwheel.wheelPort[wheel]}', timeout=30, timeLim=60)
+        self.waitForEndBlock(cmd, f'Calibrating FW {self.wheelPort[wheel]}', timeout=30, timeLim=60)
         # wait for the start the calibration
         self.waitForEndBlock(cmd, f'Calibrating')
         # wait for DONE or CALIBRATE FAILED basically.

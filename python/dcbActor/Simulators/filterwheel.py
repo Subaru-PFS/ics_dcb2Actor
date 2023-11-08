@@ -5,9 +5,13 @@ import time
 
 
 class FilterwheelSim(socket.socket):
-    def __init__(self):
+    wheelPortConfig = dict(dcb=dict(line=1, qth=0),
+                           dcb2=dict(line=0, qth=1))
+
+    def __init__(self, name):
         """Fake filterwheel tcp server."""
         socket.socket.__init__(self, socket.AF_INET, socket.SOCK_STREAM)
+        self.wheelPort = self.wheelPortConfig[name]
         self.buf = []
 
     def connect(self, server):
@@ -63,9 +67,8 @@ class FilterwheelSim(socket.socket):
                             'iteration 5 z1=0.0491  z2=0.0486 \n'
                             '\nZeros for channel 1, 2 = .0491, .0486\n')
 
-
     def wheelCalib(self, wheel):
-        wheelId = 1 if wheel == 'qth' else 0
+        wheelId = self.wheelPort[wheel]
         wheelCalib = f'port0 = |UL|  port1 = |LL| \nCalibrating FW {wheelId} \nattached 2 filter wheel(s): \n' \
                      'index 0: ID 0 Name EFW \nindex 1: ID 1 Name EFW \nselecting 1\nCalibrating \nDone\n'
         return wheelCalib
