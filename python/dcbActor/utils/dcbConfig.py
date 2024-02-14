@@ -283,13 +283,26 @@ class DcbConfig(object):
         cmd :
             mhs command.
         """
+
+        def mergeCollSetConfig(config):
+            """Merge collimator sets config to a single list."""
+            allCollConfig = 12 * ['none']
+
+            for iColl, value in zip(config.index, config):
+                allCollConfig[iColl] = value
+
+            return allCollConfig
+
         for collSet in self.collSets:
             collSet.genKeys(cmd)
 
         dcbSetup = self.dcbSetup()
         dcbKeys = dcbSetup.query('bundle!="none"')
-        dcbMasks = dcbKeys.fNumber.values.tolist() + (12 - len(dcbKeys)) * ['none']
-        dcbBundles = dcbKeys.bundle.values.tolist() + (12 - len(dcbKeys)) * ['none']
+
+        # Merge collSet config and preserve collimator index (INSTRM-2166)
+        dcbMasks = mergeCollSetConfig(dcbKeys.fNumber)
+        dcbBundles = mergeCollSetConfig(dcbKeys.bundle)
+
         dcbConfigDate = dcbSetup.timestamp.max()
 
         colors = dcbKeys.bundle.values.tolist()
